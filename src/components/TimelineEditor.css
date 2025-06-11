@@ -1,0 +1,227 @@
+.timeline-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #1a1a1a;
+}
+
+.timeline-header {
+  display: flex;
+  flex-direction: column;
+  background-color: #2a2a2a;
+  border-bottom: 1px solid #444;
+}
+
+.timeline-controls {
+  display: flex;
+  gap: 0.5rem;
+  padding: 1rem;
+}
+
+.timeline-controls button {
+  background-color: #007acc;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.timeline-controls button:hover {
+  background-color: #005a9e;
+}
+
+.timeline-ruler {
+  position: relative;
+  height: 40px;
+  background-color: #333;
+  border-bottom: 1px solid #444;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.ruler-mark {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background-color: #666;
+}
+
+.ruler-label {
+  position: absolute;
+  top: 5px;
+  left: 2px;
+  font-size: 0.8rem;
+  color: #ccc;
+  font-family: monospace;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+.timeline-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.tracks-container {
+  flex: 1;
+  overflow-y: auto;
+  background-color: #1a1a1a;
+}
+
+.timeline-track {
+  display: flex;
+  border-bottom: 1px solid #333;
+  min-height: 60px;
+}
+
+.track-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 200px;
+  padding: 0.5rem 1rem;
+  background-color: #2a2a2a;
+  border-right: 1px solid #444;
+  flex-shrink: 0;
+}
+
+.track-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.add-clip-btn {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.add-clip-btn:hover {
+  background-color: #218838;
+}
+
+.track-content {
+  position: relative;
+  flex: 1;
+  min-height: 60px;
+  background-color: #1a1a1a;
+}
+
+.timeline-clip {
+  position: absolute;
+  top: 5px;
+  height: 50px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  border: 2px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.timeline-clip.video {
+  background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+}
+
+.timeline-clip.audio {
+  background: linear-gradient(135deg, #4834d4, #686de0);
+}
+
+.timeline-clip.selected {
+  border-color: #007acc;
+  box-shadow: 0 0 10px rgba(0, 122, 204, 0.5);
+}
+
+.clip-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  padding: 0.25rem;
+  font-size: 0.8rem;
+  color: white;
+  text-align: center;
+}
+
+.clip-name {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.clip-duration {
+  font-size: 0.7rem;
+  opacity: 0.8;
+}
+
+.resize-handle {
+  position: absolute;
+  top: 0;
+  width: 10px;
+  height: 100%;
+  background-color: rgba(255,255,255,0.1);
+  cursor: ew-resize;
+  z-index: 2;
+}
+
+.resize-handle.left { left: 0; }
+.resize-handle.right { right: 0; }
+
+.resize-handle:hover {
+  background-color: rgba(255, 255, 255, 0.5);
+}
+
+.playhead {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background-color: #ff0000;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.time-marker {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background-color: #444;
+  pointer-events: none;
+}
+
+.timeline-cursor {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  width: 2px;
+  background: #ff0000;
+  z-index: 100;
+  cursor: grab;
+  pointer-events: auto;
+  transition: left 0.05s linear;
+}
+
+.timeline-cursor:hover {
+  background: #ff4444;
+  width: 3px;
+}
+
+.timeline-cursor:active {
+  cursor: grabbing;
+  background: #ff6666;
+} 
