@@ -5,6 +5,7 @@ import './VideoEditor.css';
 import { getTimelineDuration } from '../utils/getTimelineDuration';
 import { getTrackLastEnd } from '../utils/getTrackLastEnd';
 import { checkForOverlaps } from '../utils/checkForOverlaps';
+import { processVideoFile, processAudioFile } from '../utils/fileUploadUtils';
 
 const VideoEditor = () => {
   const [tracks, setTracks] = useState([
@@ -12,35 +13,13 @@ const VideoEditor = () => {
       id: 'video-1',
       type: 'video',
       name: 'Video Track 1',
-      clips: [
-        {
-          id: 'clip-1',
-          startTime: 0,
-          duration: 10,
-          source: 'https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4',
-          trimStart: 0,
-          trimEnd: 10,
-          crop: { x: 0, y: 0, width: 100, height: 100 },
-          type: 'video'
-        }
-      ]
+      clips: []
     },
     {
       id: 'audio-1',
       type: 'audio',
       name: 'Audio Track 1',
-      clips: [
-        {
-          id: 'audio-clip-1',
-          startTime: 0,
-          duration: 10,
-          source: 'https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4',
-          trimStart: 0,
-          trimEnd: 10,
-          volume: 1,
-          type: 'audio'
-        }
-      ]
+      clips: []
     }
   ]);
 
@@ -163,6 +142,55 @@ const VideoEditor = () => {
     );
   };
 
+  // Add clip from uploaded file
+  const addClipFromFile = async (trackId, file) => {
+    try {
+      const track = tracks.find(t => t.id === trackId);
+      if (!track) return;
+
+      let processedFile;
+      if (track.type === 'video') {
+        processedFile = await processVideoFile(file);
+      } else if (track.type === 'audio') {
+        processedFile = await processAudioFile(file);
+      } else {
+        throw new Error('Unsupported track type');
+      }
+
+      const lastEnd = getTrackLastEnd(track);
+      
+      setTracks(prevTracks =>
+        prevTracks.map(track => {
+          if (track.id === trackId) {
+            return {
+              ...track,
+              clips: [
+                ...track.clips,
+                {
+                  id: `clip-${Date.now()}`,
+                  startTime: lastEnd,
+                  duration: processedFile.duration,
+                  source: processedFile.url,
+                  trimStart: 0,
+                  trimEnd: processedFile.duration,
+                  crop: { x: 0, y: 0, width: 100, height: 100 },
+                  volume: 1,
+                  type: track.type,
+                  name: processedFile.name,
+                  originalFile: processedFile.originalFile,
+                },
+              ],
+            };
+          }
+          return track;
+        })
+      );
+    } catch (error) {
+      console.error('Error adding clip from file:', error);
+      alert('Error uploading file. Please try again.');
+    }
+  };
+
   // Get the current clip data when selectedClip changes
   const getCurrentClipData = () => {
     if (!selectedClip) return null;
@@ -217,6 +245,41 @@ const VideoEditor = () => {
     setTracks(prev => [...prev, newTrack]);
   };
 
+  const reorderTracks = (fromIndex, toIndex) => {
+    setTracks(prevTracks => {
+      const newTracks = [...prevTracks];
+      const [movedTrack] = newTracks.splice(fromIndex, 1);
+      newTracks.splice(toIndex, 0, movedTrack);
+      return newTracks;
+    });
+  };
+
+  const deleteClip = (trackId, clipId) => {
+    setTracks(prevTracks =>
+      prevTracks.map(track =>
+        track.id === trackId
+          ? { ...track, clips: track.clips.filter(clip => clip.id !== clipId) }
+          : track
+      )
+    );
+    // Clear selection if the deleted clip was selected
+    if (selectedClip && selectedClip.clipId === clipId) {
+      setSelectedClip(null);
+    }
+  };
+
+  const deleteTrack = (trackId) => {
+    setTracks(prevTracks => prevTracks.filter(track => track.id !== trackId));
+    // Clear selection if the deleted track contained the selected clip
+    if (selectedClip && selectedClip.trackId === trackId) {
+      setSelectedClip(null);
+    }
+  };
+
+  const handleZoomChange = (newZoom) => {
+    setZoom(newZoom);
+  };
+
   const timelineDuration = getTimelineDuration(tracks);
 
   return (
@@ -230,11 +293,6 @@ const VideoEditor = () => {
           <span className="progress-indicator">
             {currentTime.toFixed(2)} / {timelineDuration.toFixed(2)}
           </span>
-          <div className="zoom-controls">
-            <button onClick={() => setZoom(Math.max(0.1, zoom - 0.1))}>-</button>
-            <span>{Math.round(zoom * 100)}%</span>
-            <button onClick={() => setZoom(Math.min(5, zoom + 0.1))}>+</button>
-          </div>
         </div>
       </div>
 
@@ -249,6 +307,7 @@ const VideoEditor = () => {
             onTimeUpdate={handleTimeUpdate}
             onDurationChange={handleDurationChange}
             onPlayPause={handlePlayPause}
+            onSeek={handleSeek}
           />
         </div>
 
@@ -265,9 +324,14 @@ const VideoEditor = () => {
             onClipCrop={handleClipCrop}
             onAddTrack={addTrack}
             onAddClip={addClip}
+            onAddClipFromFile={addClipFromFile}
             onSeek={handleSeek}
             onClipUpdate={handleClipUpdate}
             checkForOverlaps={checkForOverlaps}
+            onReorderTracks={reorderTracks}
+            onDeleteClip={deleteClip}
+            onDeleteTrack={deleteTrack}
+            onZoomChange={handleZoomChange}
           />
         </div>
       </div>
@@ -285,8 +349,8 @@ const VideoEditor = () => {
           </div>
           
           <div className="property-group">
-            <label>Clip ID:</label>
-            <span className="clip-id">{currentClipData.id}</span>
+            <label>File Name:</label>
+            <span className="clip-name">{currentClipData.name || currentClipData.id}</span>
           </div>
 
           <div className="property-group">

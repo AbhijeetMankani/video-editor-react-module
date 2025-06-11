@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './TimelineEditor.css';
 import { checkForOverlaps } from '../utils/checkForOverlaps';
+import { createFileInput } from '../utils/fileUploadUtils';
 
 const MIN_DURATION = 0.5; // seconds
 
@@ -16,9 +17,14 @@ const TimelineEditor = ({
   onClipCrop,
   onAddTrack,
   onAddClip,
+  onAddClipFromFile,
   onSeek,
   onClipUpdate,
-  checkForOverlaps
+  checkForOverlaps,
+  onReorderTracks,
+  onDeleteClip,
+  onDeleteTrack,
+  onZoomChange
 }) => {
   const [dragging, setDragging] = useState(null);
   const [resizing, setResizing] = useState(null);
@@ -33,6 +39,20 @@ const TimelineEditor = ({
 
   const pixelsPerSecond = 50 * zoom;
   const timelineWidth = duration * pixelsPerSecond;
+
+  // Calculate time scale unit based on zoom level
+  const getTimeScaleUnit = () => {
+    if (zoom >= 5) return 0.1; // Show every 0.1 seconds when very zoomed in
+    if (zoom >= 3) return 0.2; // Show every 0.2 seconds when zoomed in
+    if (zoom >= 2) return 0.5; // Show every 0.5 seconds when zoomed in
+    if (zoom >= 1) return 1; // Show every second at normal zoom
+    if (zoom >= 0.5) return 2; // Show every 2 seconds when zoomed out
+    if (zoom >= 0.2) return 5; // Show every 5 seconds when more zoomed out
+    if (zoom >= 0.1) return 10; // Show every 10 seconds when very zoomed out
+    return 30; // Show every 30 seconds when extremely zoomed out
+  };
+
+  const timeScaleUnit = getTimeScaleUnit();
 
   const handleRulerMouseDown = (e) => {
     e.stopPropagation();
@@ -187,6 +207,14 @@ const TimelineEditor = ({
     const clipLeft = clip.startTime * pixelsPerSecond;
     const clipWidth = clip.duration * pixelsPerSecond;
     const isSelected = selectedClip?.clipId === clip.id;
+    const displayName = clip.name || clip.id;
+
+    const handleDeleteClip = (e) => {
+      e.stopPropagation();
+      if (window.confirm('Are you sure you want to delete this clip?')) {
+        onDeleteClip(trackId, clip.id);
+      }
+    };
 
     return (
       <div
@@ -206,52 +234,133 @@ const TimelineEditor = ({
       >
         <div className="clip-content">
           <div className="clip-name">
-            {trackType === 'video' ? '🎥' : '🎵'} {clip.id}
+            {trackType === 'video' ? '🎥' : '🎵'} {displayName}
           </div>
           <div className="clip-duration">
             {clip.duration.toFixed(1)}s
           </div>
         </div>
+        <button 
+          className="clip-delete-btn"
+          onClick={handleDeleteClip}
+          title="Delete Clip"
+        >
+          ×
+        </button>
         <div className="resize-handle left" />
         <div className="resize-handle right" />
       </div>
     );
   };
 
-  const renderTrack = (track, idx) => (
-    <div
-      key={track.id}
-      className="timeline-track"
-      ref={el => (trackRefs.current[idx] = el)}
-    >
-      <div className="track-header">
-        <span className="track-name">{track.name}</span>
-        <button 
-          className="add-clip-btn"
-          onClick={() => {
-            const newClip = {
-              source: 'https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4',
-              duration: 5,
-              volume: 1
-            };
-            onAddClip(track.id, newClip);
-          }}
-        >
-          +
-        </button>
+  const renderTrack = (track, idx) => {
+    const handleFileUpload = () => {
+      const accept = track.type === 'video' ? 'video/*' : 'audio/*';
+      createFileInput(accept, (file) => {
+        onAddClipFromFile(track.id, file);
+      });
+    };
+
+    const handleMoveUp = () => {
+      if (idx > 0) {
+        onReorderTracks(idx, idx - 1);
+      }
+    };
+
+    const handleMoveDown = () => {
+      if (idx < tracks.length - 1) {
+        onReorderTracks(idx, idx + 1);
+      }
+    };
+
+    const handleDeleteTrack = () => {
+      if (window.confirm(`Are you sure you want to delete "${track.name}" and all its clips?`)) {
+        onDeleteTrack(track.id);
+      }
+    };
+
+    return (
+      <div
+        key={track.id}
+        className="timeline-track"
+        ref={el => (trackRefs.current[idx] = el)}
+      >
+        <div className="track-header">
+          <div className="track-reorder-controls">
+            <button 
+              className="reorder-btn up-btn"
+              title="Move Track Up"
+              onClick={handleMoveUp}
+              disabled={idx === 0}
+            >
+              ▲
+            </button>
+            <button 
+              className="reorder-btn down-btn"
+              title="Move Track Down"
+              onClick={handleMoveDown}
+              disabled={idx === tracks.length - 1}
+            >
+              ▼
+            </button>
+          </div>
+          <span className="track-name">{track.name}</span>
+          <div className="track-controls">
+            <button 
+              className="add-clip-btn"
+              title={`Upload ${track.type} File`}
+              onClick={handleFileUpload}
+            >
+              +
+            </button>
+            <button 
+              className="delete-track-btn"
+              title="Delete Track"
+              onClick={handleDeleteTrack}
+            >
+              🗑️
+            </button>
+          </div>
+        </div>
+        <div className="track-content">
+          {track.clips.map(clip => renderClip(clip, track.id, track.type, idx))}
+        </div>
       </div>
-      <div className="track-content">
-        {track.clips.map(clip => renderClip(clip, track.id, track.type, idx))}
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="timeline-editor" style={{ position: 'relative' }}>
       <div className="timeline-header">
-        <div className="timeline-controls">
-          <button onClick={() => onAddTrack('video')}>Add Video Track</button>
-          <button onClick={() => onAddTrack('audio')}>Add Audio Track</button>
+        <div className="timeline-header-controls-row">
+          <div className="timeline-add-track-controls">
+            <button onClick={() => onAddTrack('video')}>Add Video Track</button>
+            <button onClick={() => onAddTrack('audio')}>Add Audio Track</button>
+          </div>
+          <div className="timeline-zoom-controls">
+            <input
+              type="range"
+              min="0.1"
+              max="5"
+              step="0.1"
+              value={zoom}
+              onChange={(e) => onZoomChange(parseFloat(e.target.value))}
+              className="zoom-slider"
+            />
+            <input
+              type="number"
+              min="10"
+              max="500"
+              step="1"
+              value={Math.round(zoom * 100)}
+              onChange={(e) => {
+                const newZoom = Math.max(0.1, Math.min(5, parseFloat(e.target.value) / 100));
+                onZoomChange(newZoom);
+              }}
+              className="zoom-input"
+            />
+            <span className="zoom-label">%</span>
+          </div>
         </div>
         <div 
           className="timeline-ruler"
@@ -259,15 +368,25 @@ const TimelineEditor = ({
           onMouseDown={handleRulerMouseDown}
         >
           {/* Time scale with markers */}
-          {Array.from({ length: Math.ceil(duration) + 1 }, (_, i) => (
-            <div
-              key={i}
-              className="ruler-mark"
-              style={{ left: `${200 + (i * pixelsPerSecond)}px` }}
-            >
-              <span className="ruler-label">{i}s</span>
-            </div>
-          ))}
+          {Array.from({ length: Math.ceil(duration / timeScaleUnit) + 1 }, (_, i) => {
+            const time = i * timeScaleUnit;
+            return (
+              <div
+                key={i}
+                className="ruler-mark"
+                style={{ left: `${200 + (time * pixelsPerSecond)}px` }}
+              >
+                <span className="ruler-label">
+                  {time >= 60 
+                    ? `${Math.floor(time / 60)}:${(time % 60).toString().padStart(2, '0')}` 
+                    : timeScaleUnit < 1 
+                      ? `${time.toFixed(1)}s` 
+                      : `${time}s`
+                  }
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
 

@@ -42,4 +42,31 @@
   border-radius: 6px;
   min-width: 100px;
   text-align: center;
+}
+
+.playback-speed-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.playback-speed-controls label {
+  font-size: 1rem;
+  color: #ccc;
+}
+
+.playback-speed-controls select {
+  background-color: #333;
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: white;
+  padding: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  outline: none;
+}
+
+.playback-speed-controls select:focus {
+  border-color: #007acc;
+  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
 } 
