@@ -1,389 +1,412 @@
 .timeline-editor {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background-color: #1a1a1a;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	background-color: #1a1a1a;
 }
 
 .timeline-header {
-  display: flex;
-  flex-direction: column;
-  background-color: #2a2a2a;
-  border-bottom: 1px solid #444;
+	display: flex;
+	flex-direction: column;
+	background-color: #2a2a2a;
+	border-bottom: 1px solid #444;
+	flex-shrink: 0;
 }
 
 .timeline-header-controls-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 1rem;
 }
 
 .timeline-add-track-controls {
-  display: flex;
-  gap: 0.5rem;
+	display: flex;
+	gap: 0.5rem;
 }
 
 .timeline-add-track-controls button {
-  background-color: #007acc;
-  color: white;
-  border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9rem;
+	background-color: #007acc;
+	color: white;
+	border: none;
+	padding: 0.5rem 1rem;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 0.9rem;
 }
 
 .timeline-add-track-controls button:hover {
-  background-color: #005a9e;
+	background-color: #005a9e;
 }
 
 .timeline-zoom-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
 }
 
 .timeline-zoom-controls .zoom-slider {
-  width: 100px;
-  height: 8px;
-  background: #444;
-  border-radius: 4px;
-  outline: none;
-  -webkit-appearance: none;
-  appearance: none;
+	width: 100px;
+	height: 8px;
+	background: #444;
+	border-radius: 4px;
+	outline: none;
+	-webkit-appearance: none;
+	appearance: none;
 }
 
 .timeline-zoom-controls .zoom-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  background: #007acc;
-  border-radius: 50%;
-  cursor: pointer;
-  border: none;
+	-webkit-appearance: none;
+	appearance: none;
+	width: 18px;
+	height: 18px;
+	background: #007acc;
+	border-radius: 50%;
+	cursor: pointer;
+	border: none;
 }
 
 .timeline-zoom-controls .zoom-slider::-webkit-slider-thumb:hover {
-  background: #005a9e;
+	background: #005a9e;
 }
 
 .timeline-zoom-controls .zoom-slider::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  background: #007acc;
-  border-radius: 50%;
-  cursor: pointer;
-  border: none;
+	width: 18px;
+	height: 18px;
+	background: #007acc;
+	border-radius: 50%;
+	cursor: pointer;
+	border: none;
 }
 
 .timeline-zoom-controls .zoom-slider::-moz-range-thumb:hover {
-  background: #005a9e;
+	background: #005a9e;
 }
 
 .timeline-zoom-controls .zoom-input {
-  width: 60px;
-  padding: 0.35rem 0.6rem;
-  background-color: #333;
-  border: 1px solid #555;
-  border-radius: 4px;
-  color: white;
-  font-size: 0.9rem;
-  text-align: center;
+	width: 60px;
+	padding: 0.35rem 0.6rem;
+	background-color: #333;
+	border: 1px solid #555;
+	border-radius: 4px;
+	color: white;
+	font-size: 0.9rem;
+	text-align: center;
 }
 
 .timeline-zoom-controls .zoom-input:focus {
-  outline: none;
-  border-color: #007acc;
-  box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
+	outline: none;
+	border-color: #007acc;
+	box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.2);
 }
 
 .timeline-zoom-controls .zoom-label {
-  font-size: 0.9rem;
-  color: #ccc;
-  font-weight: 500;
+	font-size: 0.9rem;
+	color: #ccc;
+	font-weight: 500;
 }
 
-.timeline-ruler {
-  position: relative;
-  height: 40px;
-  background-color: #333;
-  border-bottom: 1px solid #444;
-  overflow: hidden;
-  cursor: pointer;
+/* New timeline main structure */
+.timeline-main {
+	display: flex;
+	flex: 1;
+	overflow: hidden;
+}
+
+/* Fixed track headers */
+.timeline-track-headers {
+	width: 200px;
+	flex-shrink: 0;
+	background-color: #2a2a2a;
+	border-right: 1px solid #444;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.timeline-track-header-title {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.5rem 1rem;
+	height: 40px;
+	border-bottom: 1px solid #333;
+	border-top: 1px solid #333;
+	background-color: #2a2a2a;
+}
+
+.timeline-track-header-fixed {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.5rem 1rem;
+	height: 60px;
+	border-bottom: 1px solid #333;
+	border-top: 1px solid #333;
+	background-color: #2a2a2a;
+}
+
+/* Scrollable timeline content */
+.timeline-scrollable-content {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.timeline-ruler-fixed {
+	position: relative;
+	height: 40px;
+	background-color: #333;
+	border-bottom: 1px solid #444;
+	overflow-x: auto;
+	overflow-y: hidden;
+	cursor: pointer;
+	flex-shrink: 0;
+	/* Hide scrollbar */
+	scrollbar-width: none; /* Firefox */
+	-ms-overflow-style: none; /* Internet Explorer 10+ */
+}
+
+.timeline-ruler-fixed::-webkit-scrollbar {
+	display: none; /* Safari and Chrome */
+}
+
+.timeline-tracks-scrollable {
+	flex: 1;
+	overflow-x: auto;
+	overflow-y: auto;
+	background-color: #1a1a1a;
+}
+
+.timeline-tracks-content {
+	background-color: #1a1a1a;
+}
+
+.timeline-track-content {
+	position: relative;
+	background-color: #1a1a1a;
 }
 
 .ruler-mark {
-  position: absolute;
-  top: 0;
-  width: 1px;
-  height: 100%;
-  background-color: #666;
+	position: absolute;
+	top: 0;
+	width: 1px;
+	height: 100%;
+	background-color: #666;
 }
 
 .ruler-label {
-  position: absolute;
-  top: 5px;
-  left: 2px;
-  font-size: 0.8rem;
-  color: #ccc;
-  font-family: monospace;
-  white-space: nowrap;
-  user-select: none;
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-}
-
-.timeline-content {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-}
-
-.tracks-container {
-  flex: 1;
-  overflow-y: auto;
-  background-color: #1a1a1a;
-}
-
-.timeline-track {
-  display: flex;
-  border-bottom: 1px solid #333;
-  min-height: 60px;
-}
-
-.track-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 200px;
-  padding: 0.5rem 1rem;
-  background-color: #2a2a2a;
-  border-right: 1px solid #444;
-  flex-shrink: 0;
+	position: absolute;
+	top: 5px;
+	left: 2px;
+	font-size: 0.8rem;
+	color: #ccc;
+	font-family: monospace;
+	white-space: nowrap;
+	user-select: none;
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
 }
 
 .track-reorder-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  margin-right: 0.5rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.1rem;
+	margin-right: 0.5rem;
 }
 
 .reorder-btn {
-  background-color: #444;
-  color: #ccc;
-  border: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 2px;
-  cursor: pointer;
-  font-size: 0.6rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-  padding: 0;
+	background-color: #444;
+	color: #ccc;
+	border: none;
+	width: 16px;
+	height: 16px;
+	border-radius: 2px;
+	cursor: pointer;
+	font-size: 0.6rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: all 0.2s;
+	padding: 0;
 }
 
 .reorder-btn:hover:not(:disabled) {
-  background-color: #666;
-  color: white;
+	background-color: #666;
+	color: white;
 }
 
 .reorder-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
+	opacity: 0.3;
+	cursor: not-allowed;
 }
 
 .track-name {
-  font-size: 0.9rem;
-  font-weight: 500;
-  flex: 1;
-  margin: 0 0.5rem;
+	font-size: 0.9rem;
+	font-weight: 500;
+	flex: 1;
+	margin: 0 0.5rem;
 }
 
 .track-controls {
-  display: flex;
-  gap: 0.25rem;
-  align-items: center;
+	display: flex;
+	gap: 0.25rem;
+	align-items: center;
 }
 
 .add-clip-btn {
-  background-color: #28a745;
-  color: white;
-  border: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.2s;
+	background-color: #28a745;
+	color: white;
+	border: none;
+	width: 24px;
+	height: 24px;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 1rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: background-color 0.2s;
 }
 
 .add-clip-btn:hover {
-  background-color: #218838;
-}
-
-.track-content {
-  position: relative;
-  flex: 1;
-  min-height: 60px;
-  background-color: #1a1a1a;
+	background-color: #218838;
 }
 
 .timeline-clip {
-  position: absolute;
-  top: 5px;
-  height: 50px;
-  border-radius: 4px;
-  cursor: pointer;
-  user-select: none;
-  border: 2px solid transparent;
-  transition: border-color 0.2s;
+	position: absolute;
+	top: 5px;
+	height: 50px;
+	border-radius: 4px;
+	cursor: pointer;
+	user-select: none;
+	border: 2px solid transparent;
+	transition: border-color 0.2s;
 }
 
 .timeline-clip.video {
-  background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+	background: linear-gradient(135deg, #ff6b6b, #ee5a24);
 }
 
 .timeline-clip.audio {
-  background: linear-gradient(135deg, #4834d4, #686de0);
+	background: linear-gradient(135deg, #4834d4, #686de0);
 }
 
 .timeline-clip.selected {
-  border-color: #007acc;
-  box-shadow: 0 0 10px rgba(0, 122, 204, 0.5);
+	border-color: #007acc;
+	box-shadow: 0 0 10px rgba(0, 122, 204, 0.5);
 }
 
 .clip-content {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  height: 100%;
-  padding: 0.25rem;
-  font-size: 0.8rem;
-  color: white;
-  text-align: center;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	height: 100%;
+	padding: 0.25rem;
+	font-size: 0.8rem;
+	color: white;
+	text-align: center;
 }
 
 .clip-delete-btn {
-  position: absolute;
-  top: 2px;
-  right: 2px;
-  background-color: rgba(220, 53, 69, 0.8);
-  color: white;
-  border: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  cursor: pointer;
-  font-size: 0.7rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.2s;
-  z-index: 10;
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	background-color: rgba(220, 53, 69, 0.8);
+	color: white;
+	border: none;
+	width: 16px;
+	height: 16px;
+	border-radius: 50%;
+	cursor: pointer;
+	font-size: 0.7rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0;
+	transition: opacity 0.2s;
+	z-index: 10;
 }
 
 .timeline-clip:hover .clip-delete-btn {
-  opacity: 1;
+	opacity: 1;
 }
 
 .clip-delete-btn:hover {
-  background-color: rgba(220, 53, 69, 1);
+	background-color: rgba(220, 53, 69, 1);
 }
 
 .clip-name {
-  font-weight: 500;
-  margin-bottom: 0.25rem;
+	font-weight: 500;
+	margin-bottom: 0.25rem;
 }
 
 .clip-duration {
-  font-size: 0.7rem;
-  opacity: 0.8;
+	font-size: 0.7rem;
+	opacity: 0.8;
 }
 
 .delete-track-btn {
-  background-color: #dc3545;
-  color: white;
-  border: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.2s;
+	background-color: #dc3545;
+	color: white;
+	border: none;
+	width: 24px;
+	height: 24px;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 0.8rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: background-color 0.2s;
 }
 
 .delete-track-btn:hover {
-  background-color: #c82333;
+	background-color: #c82333;
 }
 
 .resize-handle {
-  position: absolute;
-  top: 0;
-  width: 10px;
-  height: 100%;
-  background-color: rgba(255,255,255,0.1);
-  cursor: ew-resize;
-  z-index: 2;
+	position: absolute;
+	top: 0;
+	width: 10px;
+	height: 100%;
+	background-color: rgba(255, 255, 255, 0.1);
+	cursor: ew-resize;
+	z-index: 2;
 }
 
-.resize-handle.left { left: 0; }
-.resize-handle.right { right: 0; }
+.resize-handle.left {
+	left: 0;
+}
+
+.resize-handle.right {
+	right: 0;
+}
 
 .resize-handle:hover {
-  background-color: rgba(255, 255, 255, 0.5);
-}
-
-.playhead {
-  position: absolute;
-  top: 0;
-  width: 2px;
-  height: 100%;
-  background-color: #ff0000;
-  z-index: 10;
-  pointer-events: none;
-}
-
-.time-marker {
-  position: absolute;
-  top: 0;
-  width: 1px;
-  height: 100%;
-  background-color: #444;
-  pointer-events: none;
+	background-color: rgba(255, 255, 255, 0.5);
 }
 
 .timeline-cursor {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  width: 2px;
-  background: #ff0000;
-  z-index: 100;
-  cursor: grab;
-  pointer-events: auto;
-  transition: left 0.05s linear;
+	position: absolute;
+	top: 0;
+	height: 100%;
+	width: 2px;
+	background: #ff0000;
+	z-index: 100;
+	cursor: grab;
+	pointer-events: auto;
+	transition: left 0.05s linear;
 }
 
 .timeline-cursor:hover {
-  background: #ff4444;
-  width: 3px;
+	background: #ff4444;
+	width: 3px;
 }
 
 .timeline-cursor:active {
-  cursor: grabbing;
-  background: #ff6666;
-} 
+	cursor: grabbing;
+	background: #ff6666;
+}
