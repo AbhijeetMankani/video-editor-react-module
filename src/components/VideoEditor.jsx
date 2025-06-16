@@ -28,8 +28,49 @@ const VideoEditor = () => {
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [zoom, setZoom] = useState(1);
 	const [selectedClip, setSelectedClip] = useState(null);
+	const [selectedTool, setSelectedTool] = useState("select");
 
 	const videoRef = useRef(null);
+
+	// Tool definitions
+	const tools = [
+		{
+			id: "select",
+			name: "Select",
+			icon: "👆",
+			description: "Select and move clips",
+		},
+		{
+			id: "crop",
+			name: "Crop",
+			icon: "✂️",
+			description: "Crop video clips",
+		},
+		{
+			id: "scale",
+			name: "Scale",
+			icon: "🔍",
+			description: "Scale video clips",
+		},
+		{
+			id: "move",
+			name: "Move",
+			icon: "✋",
+			description: "Move clips on timeline",
+		},
+		{
+			id: "cut",
+			name: "Cut",
+			icon: "🔪",
+			description: "Cut clips at timeline position",
+		},
+		{
+			id: "volume",
+			name: "Volume",
+			icon: "🔊",
+			description: "Adjust audio volume",
+		},
+	];
 
 	const handleTimeUpdate = (time) => {
 		console.log("VideoEditor handleTimeUpdate called with time:", time);
@@ -121,6 +162,59 @@ const VideoEditor = () => {
 		handleClipUpdate(trackId, clipId, { crop });
 	};
 
+	const handlePositionChange = (trackId, clipId, position) => {
+		handleClipUpdate(trackId, clipId, { position });
+	};
+
+	const handleScaleChange = (trackId, clipId, scale) => {
+		handleClipUpdate(trackId, clipId, { scale });
+	};
+
+	const handleCutClip = (trackId, clipId) => {
+		const track = tracks.find((t) => t.id === trackId);
+		const clip = track?.clips.find((c) => c.id === clipId);
+
+		if (!clip) return;
+
+		// Calculate the cut point relative to the clip's start time
+		const cutPoint = currentTime - clip.startTime;
+
+		// Don't cut if the cut point is at the very beginning or end of the clip
+		if (cutPoint <= 0 || cutPoint >= clip.duration) return;
+
+		// Create the first part of the clip (before the cut)
+		const firstClip = {
+			...clip,
+			id: `clip-${Date.now()}-1`,
+			duration: cutPoint,
+			trimEnd: clip.trimStart + cutPoint,
+		};
+
+		// Create the second part of the clip (after the cut)
+		const secondClip = {
+			...clip,
+			id: `clip-${Date.now()}-2`,
+			startTime: clip.startTime + cutPoint,
+			duration: clip.duration - cutPoint,
+			trimStart: clip.trimStart + cutPoint,
+		};
+
+		// Update the track with the two new clips
+		setTracks((prevTracks) =>
+			prevTracks.map((t) =>
+				t.id === trackId
+					? {
+							...t,
+							clips: t.clips
+								.filter((c) => c.id !== clipId) // Remove original clip
+								.concat([firstClip, secondClip]) // Add the two new clips
+								.sort((a, b) => a.startTime - b.startTime), // Sort by start time
+					  }
+					: t
+			)
+		);
+	};
+
 	// Updated addClip with overlap prevention
 	const addClip = (trackId, clipData) => {
 		setTracks((prevTracks) =>
@@ -140,6 +234,7 @@ const VideoEditor = () => {
 								trimStart: 0,
 								trimEnd: duration,
 								crop: { x: 0, y: 0, width: 100, height: 100 },
+								scale: 1.0,
 								volume: 1,
 								type: track.type,
 								...clipData,
@@ -189,6 +284,7 @@ const VideoEditor = () => {
 										width: 100,
 										height: 100,
 									},
+									scale: 1.0,
 									volume: 1,
 									type: track.type,
 									name: processedFile.name,
@@ -323,6 +419,26 @@ const VideoEditor = () => {
 
 	const timelineDuration = getTimelineDuration(tracks);
 
+	// Keyboard shortcuts
+	useEffect(() => {
+		const handleKeyDown = (e) => {
+			// Cut operation when cut tool is selected and 'C' key is pressed
+			if (
+				selectedTool === "cut" &&
+				e.key.toLowerCase() === "c" &&
+				selectedClip
+			) {
+				e.preventDefault();
+				handleCutClip(selectedClip.trackId, selectedClip.clipId);
+			}
+		};
+
+		document.addEventListener("keydown", handleKeyDown);
+		return () => {
+			document.removeEventListener("keydown", handleKeyDown);
+		};
+	}, [selectedTool, selectedClip, currentTime, tracks]);
+
 	return (
 		<div className="video-editor">
 			<div className="editor-header">
@@ -334,280 +450,439 @@ const VideoEditor = () => {
 					<span className="progress-indicator">
 						{currentTime.toFixed(2)} / {timelineDuration.toFixed(2)}
 					</span>
+					{selectedTool === "cut" && (
+						<div className="tool-indicator">
+							<span className="tool-icon">🔪</span>
+							<span className="tool-instruction">
+								Press 'C' to cut at timeline position
+							</span>
+						</div>
+					)}
 				</div>
 			</div>
 
 			<div className="editor-main">
-				<div className="editor-top">
-					<div className="player-section">
-						<VideoPlayer
-							ref={videoRef}
-							tracks={tracks}
-							currentTime={currentTime}
-							isPlaying={isPlaying}
-							duration={timelineDuration}
-							selectedClip={selectedClip}
-							onTimeUpdate={handleTimeUpdate}
-							onDurationChange={handleDurationChange}
-							onPlayPause={handlePlayPause}
-							onSeek={handleSeek}
-							onCropChange={handleClipCrop}
-						/>
-					</div>
-
-					{selectedClip && currentClipData && (
-						<div className="properties-section">
-							<div className="properties-header">
-								<h3>Clip Properties</h3>
-								<button
-									className="close-btn"
-									onClick={() => setSelectedClip(null)}
-								>
-									×
-								</button>
-							</div>
-
-							<div className="properties-content">
-								<div className="property-group">
-									<label>File Name:</label>
-									<span className="clip-name">
-										{currentClipData.name ||
-											currentClipData.id}
-									</span>
-								</div>
-
-								<div className="property-group">
-									<label>Start Time:</label>
-									<input
-										type="number"
-										step="0.1"
-										value={currentClipData.startTime}
-										onChange={(e) =>
-											handlePropertyChange(
-												"startTime",
-												parseFloat(e.target.value) || 0
-											)
-										}
-									/>
-								</div>
-
-								<div className="property-group">
-									<label>Duration:</label>
-									<input
-										type="number"
-										step="0.1"
-										min="0.1"
-										value={currentClipData.duration}
-										onChange={(e) =>
-											handlePropertyChange(
-												"duration",
-												parseFloat(e.target.value) ||
-													0.1
-											)
-										}
-									/>
-								</div>
-
-								<div className="property-group">
-									<label>Trim Start:</label>
-									<input
-										type="number"
-										step="0.1"
-										min="0"
-										value={currentClipData.trimStart}
-										onChange={(e) =>
-											handlePropertyChange(
-												"trimStart",
-												parseFloat(e.target.value) || 0
-											)
-										}
-									/>
-								</div>
-
-								<div className="property-group">
-									<label>Trim End:</label>
-									<input
-										type="number"
-										step="0.1"
-										min="0"
-										value={currentClipData.trimEnd}
-										onChange={(e) =>
-											handlePropertyChange(
-												"trimEnd",
-												parseFloat(e.target.value) || 0
-											)
-										}
-									/>
-								</div>
-
-								{currentClipData.type === "video" && (
-									<div className="property-group">
-										<label>Crop:</label>
-										<div className="crop-controls">
-											<div className="crop-row">
-												<label>X:</label>
-												<input
-													type="number"
-													step="1"
-													min="0"
-													max="100"
-													value={
-														currentClipData.crop
-															?.x || 0
-													}
-													onChange={(e) =>
-														handlePropertyChange(
-															"crop",
-															{
-																...currentClipData.crop,
-																x:
-																	parseFloat(
-																		e.target
-																			.value
-																	) || 0,
-															}
-														)
-													}
-												/>
-											</div>
-											<div className="crop-row">
-												<label>Y:</label>
-												<input
-													type="number"
-													step="1"
-													min="0"
-													max="100"
-													value={
-														currentClipData.crop
-															?.y || 0
-													}
-													onChange={(e) =>
-														handlePropertyChange(
-															"crop",
-															{
-																...currentClipData.crop,
-																y:
-																	parseFloat(
-																		e.target
-																			.value
-																	) || 0,
-															}
-														)
-													}
-												/>
-											</div>
-											<div className="crop-row">
-												<label>Width:</label>
-												<input
-													type="number"
-													step="1"
-													min="1"
-													max="100"
-													value={
-														currentClipData.crop
-															?.width || 100
-													}
-													onChange={(e) =>
-														handlePropertyChange(
-															"crop",
-															{
-																...currentClipData.crop,
-																width:
-																	parseFloat(
-																		e.target
-																			.value
-																	) || 100,
-															}
-														)
-													}
-												/>
-											</div>
-											<div className="crop-row">
-												<label>Height:</label>
-												<input
-													type="number"
-													step="1"
-													min="1"
-													max="100"
-													value={
-														currentClipData.crop
-															?.height || 100
-													}
-													onChange={(e) =>
-														handlePropertyChange(
-															"crop",
-															{
-																...currentClipData.crop,
-																height:
-																	parseFloat(
-																		e.target
-																			.value
-																	) || 100,
-															}
-														)
-													}
-												/>
-											</div>
-										</div>
-									</div>
-								)}
-
-								{currentClipData.type === "audio" && (
-									<div className="property-group">
-										<label>Volume:</label>
-										<div className="volume-control">
-											<input
-												type="range"
-												min="0"
-												max="1"
-												step="0.1"
-												value={
-													currentClipData.volume || 1
-												}
-												onChange={(e) =>
-													handlePropertyChange(
-														"volume",
-														parseFloat(
-															e.target.value
-														)
-													)
-												}
-											/>
-											<span className="volume-value">
-												{(
-													currentClipData.volume || 1
-												).toFixed(1)}
-											</span>
-										</div>
-									</div>
-								)}
-							</div>
+				<div className="toolbar-section">
+					<div className="toolbar">
+						<div className="toolbar-header">
+							<h3>Tools</h3>
 						</div>
-					)}
+						<div className="toolbar-content">
+							{tools.map((tool) => (
+								<button
+									key={tool.id}
+									className={`tool-button ${
+										selectedTool === tool.id ? "active" : ""
+									}`}
+									onClick={() => setSelectedTool(tool.id)}
+									title={tool.description}
+								>
+									<span className="tool-icon">
+										{tool.icon}
+									</span>
+									<span className="tool-name">
+										{tool.name}
+									</span>
+								</button>
+							))}
+						</div>
+					</div>
 				</div>
 
-				<div className="timeline-section">
-					<TimelineEditor
-						tracks={tracks}
-						currentTime={currentTime}
-						duration={timelineDuration}
-						zoom={zoom}
-						selectedClip={selectedClip}
-						onClipSelect={setSelectedClip}
-						onClipMove={handleClipMove}
-						onClipTrim={handleClipTrim}
-						onClipCrop={handleClipCrop}
-						onAddTrack={addTrack}
-						onAddClip={addClip}
-						onAddClipFromFile={addClipFromFile}
-						onSeek={handleSeek}
-						onClipUpdate={handleClipUpdate}
-						checkForOverlaps={checkForOverlaps}
-						onReorderTracks={reorderTracks}
-						onDeleteClip={deleteClip}
-						onDeleteTrack={deleteTrack}
-						onZoomChange={handleZoomChange}
-					/>
+				<div className="editor-content">
+					<div className="editor-top">
+						<div className="player-section">
+							<VideoPlayer
+								ref={videoRef}
+								tracks={tracks}
+								currentTime={currentTime}
+								isPlaying={isPlaying}
+								duration={timelineDuration}
+								selectedClip={selectedClip}
+								selectedTool={selectedTool}
+								onTimeUpdate={handleTimeUpdate}
+								onDurationChange={handleDurationChange}
+								onPlayPause={handlePlayPause}
+								onSeek={handleSeek}
+								onCropChange={handleClipCrop}
+								onPositionChange={handlePositionChange}
+								onScaleChange={handleScaleChange}
+							/>
+						</div>
+
+						{selectedClip && currentClipData && (
+							<div className="properties-section">
+								<div className="properties-header">
+									<h3>Clip Properties</h3>
+									<button
+										className="close-btn"
+										onClick={() => setSelectedClip(null)}
+									>
+										×
+									</button>
+								</div>
+
+								<div className="properties-content">
+									<div className="property-group">
+										<label>File Name:</label>
+										<span className="clip-name">
+											{currentClipData.name ||
+												currentClipData.id}
+										</span>
+									</div>
+
+									<div className="property-group">
+										<label>Start Time:</label>
+										<input
+											type="number"
+											step="0.1"
+											value={currentClipData.startTime}
+											onChange={(e) =>
+												handlePropertyChange(
+													"startTime",
+													parseFloat(
+														e.target.value
+													) || 0
+												)
+											}
+										/>
+									</div>
+
+									<div className="property-group">
+										<label>Duration:</label>
+										<input
+											type="number"
+											step="0.1"
+											min="0.1"
+											value={currentClipData.duration}
+											onChange={(e) =>
+												handlePropertyChange(
+													"duration",
+													parseFloat(
+														e.target.value
+													) || 0.1
+												)
+											}
+										/>
+									</div>
+
+									<div className="property-group">
+										<label>Trim Start:</label>
+										<input
+											type="number"
+											step="0.1"
+											min="0"
+											value={currentClipData.trimStart}
+											onChange={(e) =>
+												handlePropertyChange(
+													"trimStart",
+													parseFloat(
+														e.target.value
+													) || 0
+												)
+											}
+										/>
+									</div>
+
+									<div className="property-group">
+										<label>Trim End:</label>
+										<input
+											type="number"
+											step="0.1"
+											min="0"
+											value={currentClipData.trimEnd}
+											onChange={(e) =>
+												handlePropertyChange(
+													"trimEnd",
+													parseFloat(
+														e.target.value
+													) || 0
+												)
+											}
+										/>
+									</div>
+
+									{currentClipData.type === "video" && (
+										<>
+											<div className="property-group">
+												<label>Scale:</label>
+												<div className="scale-control">
+													<input
+														type="range"
+														min="0.1"
+														max="3"
+														step="0.1"
+														value={
+															currentClipData.scale ||
+															1.0
+														}
+														onChange={(e) =>
+															handlePropertyChange(
+																"scale",
+																parseFloat(
+																	e.target
+																		.value
+																)
+															)
+														}
+													/>
+													<span className="scale-value">
+														{(
+															currentClipData.scale ||
+															1.0
+														).toFixed(1)}
+														x
+													</span>
+												</div>
+											</div>
+											<div className="property-group">
+												<label>Position:</label>
+												<div className="position-controls">
+													<div className="position-row">
+														<label>X:</label>
+														<input
+															type="number"
+															step="1"
+															min="-100"
+															max="100"
+															value={
+																currentClipData
+																	.position
+																	?.x || 0
+															}
+															onChange={(e) =>
+																handlePropertyChange(
+																	"position",
+																	{
+																		...currentClipData.position,
+																		x:
+																			parseFloat(
+																				e
+																					.target
+																					.value
+																			) ||
+																			0,
+																	}
+																)
+															}
+														/>
+													</div>
+													<div className="position-row">
+														<label>Y:</label>
+														<input
+															type="number"
+															step="1"
+															min="-100"
+															max="100"
+															value={
+																currentClipData
+																	.position
+																	?.y || 0
+															}
+															onChange={(e) =>
+																handlePropertyChange(
+																	"position",
+																	{
+																		...currentClipData.position,
+																		y:
+																			parseFloat(
+																				e
+																					.target
+																					.value
+																			) ||
+																			0,
+																	}
+																)
+															}
+														/>
+													</div>
+												</div>
+											</div>
+											<div className="property-group">
+												<label>Crop:</label>
+												<div className="crop-controls">
+													<div className="crop-row">
+														<label>X:</label>
+														<input
+															type="number"
+															step="1"
+															min="0"
+															max="100"
+															value={
+																currentClipData
+																	.crop?.x ||
+																0
+															}
+															onChange={(e) =>
+																handlePropertyChange(
+																	"crop",
+																	{
+																		...currentClipData.crop,
+																		x:
+																			parseFloat(
+																				e
+																					.target
+																					.value
+																			) ||
+																			0,
+																	}
+																)
+															}
+														/>
+													</div>
+													<div className="crop-row">
+														<label>Y:</label>
+														<input
+															type="number"
+															step="1"
+															min="0"
+															max="100"
+															value={
+																currentClipData
+																	.crop?.y ||
+																0
+															}
+															onChange={(e) =>
+																handlePropertyChange(
+																	"crop",
+																	{
+																		...currentClipData.crop,
+																		y:
+																			parseFloat(
+																				e
+																					.target
+																					.value
+																			) ||
+																			0,
+																	}
+																)
+															}
+														/>
+													</div>
+													<div className="crop-row">
+														<label>Width:</label>
+														<input
+															type="number"
+															step="1"
+															min="1"
+															max="100"
+															value={
+																currentClipData
+																	.crop
+																	?.width ||
+																100
+															}
+															onChange={(e) =>
+																handlePropertyChange(
+																	"crop",
+																	{
+																		...currentClipData.crop,
+																		width:
+																			parseFloat(
+																				e
+																					.target
+																					.value
+																			) ||
+																			100,
+																	}
+																)
+															}
+														/>
+													</div>
+													<div className="crop-row">
+														<label>Height:</label>
+														<input
+															type="number"
+															step="1"
+															min="1"
+															max="100"
+															value={
+																currentClipData
+																	.crop
+																	?.height ||
+																100
+															}
+															onChange={(e) =>
+																handlePropertyChange(
+																	"crop",
+																	{
+																		...currentClipData.crop,
+																		height:
+																			parseFloat(
+																				e
+																					.target
+																					.value
+																			) ||
+																			100,
+																	}
+																)
+															}
+														/>
+													</div>
+												</div>
+											</div>
+										</>
+									)}
+
+									{currentClipData.type === "audio" && (
+										<div className="property-group">
+											<label>Volume:</label>
+											<div className="volume-control">
+												<input
+													type="range"
+													min="0"
+													max="1"
+													step="0.1"
+													value={
+														currentClipData.volume ||
+														1
+													}
+													onChange={(e) =>
+														handlePropertyChange(
+															"volume",
+															parseFloat(
+																e.target.value
+															)
+														)
+													}
+												/>
+												<span className="volume-value">
+													{(
+														currentClipData.volume ||
+														1
+													).toFixed(1)}
+												</span>
+											</div>
+										</div>
+									)}
+								</div>
+							</div>
+						)}
+					</div>
+
+					<div className="timeline-section">
+						<TimelineEditor
+							tracks={tracks}
+							currentTime={currentTime}
+							duration={timelineDuration}
+							zoom={zoom}
+							selectedClip={selectedClip}
+							onClipSelect={setSelectedClip}
+							onClipMove={handleClipMove}
+							onClipTrim={handleClipTrim}
+							onClipCrop={handleClipCrop}
+							onAddTrack={addTrack}
+							onAddClip={addClip}
+							onAddClipFromFile={addClipFromFile}
+							onSeek={handleSeek}
+							onClipUpdate={handleClipUpdate}
+							checkForOverlaps={checkForOverlaps}
+							onReorderTracks={reorderTracks}
+							onDeleteClip={deleteClip}
+							onDeleteTrack={deleteTrack}
+							onZoomChange={handleZoomChange}
+						/>
+					</div>
 				</div>
 			</div>
 		</div>

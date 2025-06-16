@@ -9,10 +9,13 @@ const VideoPlayer = forwardRef(
 			isPlaying,
 			duration,
 			selectedClip,
+			selectedTool,
 			onTimeUpdate,
 			onDurationChange,
 			onPlayPause,
 			onCropChange,
+			onPositionChange,
+			onScaleChange,
 		},
 		ref
 	) => {
@@ -22,6 +25,20 @@ const VideoPlayer = forwardRef(
 		const [playbackSpeed, setPlaybackSpeed] = useState(1); // Local state for playback speed
 		const [isDragging, setIsDragging] = useState(false);
 		const [isResizing, setIsResizing] = useState(false);
+		const [isCropDragging, setIsCropDragging] = useState(false);
+		const [cropDragStart, setCropDragStart] = useState({ x: 0, y: 0 });
+		const [cropDragEnd, setCropDragEnd] = useState({ x: 0, y: 0 });
+		const [isMoveDragging, setIsMoveDragging] = useState(false);
+		const [moveDragStart, setMoveDragStart] = useState({ x: 0, y: 0 });
+		const [moveDragEnd, setMoveDragEnd] = useState({ x: 0, y: 0 });
+		const [originalPosition, setOriginalPosition] = useState({
+			x: 0,
+			y: 0,
+		});
+		const [isScaleDragging, setIsScaleDragging] = useState(false);
+		const [scaleDragStart, setScaleDragStart] = useState({ x: 0, y: 0 });
+		const [scaleDragEnd, setScaleDragEnd] = useState({ x: 0, y: 0 });
+		const [originalScale, setOriginalScale] = useState(1.0);
 		const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 		const [resizeHandle, setResizeHandle] = useState(null);
 		const [originalCrop, setOriginalCrop] = useState(null);
@@ -31,97 +48,136 @@ const VideoPlayer = forwardRef(
 		// Helper function to get canvas coordinates
 		const getCanvasCoordinates = (clientX, clientY) => {
 			const canvas = canvasRef.current;
-			if (!canvas) return { x: 0, y: 0 };
-
 			const rect = canvas.getBoundingClientRect();
 			return {
-				x: clientX - rect.left,
-				y: clientY - rect.top,
+				x: ((clientX - rect.left) * canvas.width) / rect.width,
+				y: ((clientY - rect.top) * canvas.height) / rect.height,
 			};
 		};
 
-		// Helper function to check if a point is in a resize handle
-		const getResizeHandle = (x, y, crop) => {
-			const handleSize = 10;
+		// Helper function to get crop destination coordinates
+		const getCropDestinationCoords = (
+			crop,
+			videoElement,
+			scale = 1.0,
+			position = { x: 0, y: 0 }
+		) => {
 			const canvas = canvasRef.current;
-			if (!canvas || !crop) return null;
+			const sourceWidth = (videoElement.videoWidth * crop.width) / 100;
+			const sourceHeight = (videoElement.videoHeight * crop.height) / 100;
 
-			const canvasWidth = canvas.width;
-			const canvasHeight = canvas.height;
+			// Apply scale to the cropped content
+			const destWidth = sourceWidth * scale;
+			const destHeight = sourceHeight * scale;
 
-			// Convert crop percentages to pixel coordinates
-			const cropX = (crop.x / 100) * canvasWidth;
-			const cropY = (crop.y / 100) * canvasHeight;
-			const cropWidth = (crop.width / 100) * canvasWidth;
-			const cropHeight = (crop.height / 100) * canvasHeight;
+			// Center the crop on the canvas and apply position offset
+			const destX =
+				(canvas.width - destWidth) / 2 +
+				(canvas.width * position.x) / 100;
+			const destY =
+				(canvas.height - destHeight) / 2 +
+				(canvas.height * position.y) / 100;
 
-			// Check corners
+			return { destX, destY, destWidth, destHeight };
+		};
+
+		// Helper function to convert canvas coordinates to crop coordinates
+		const canvasToCropCoords = (
+			canvasX,
+			canvasY,
+			crop,
+			videoElement,
+			scale = 1.0,
+			position = { x: 0, y: 0 }
+		) => {
+			const { destX, destY, destWidth, destHeight } =
+				getCropDestinationCoords(crop, videoElement, scale, position);
+
+			// Check if point is within the crop area
 			if (
-				x >= cropX - handleSize &&
-				x <= cropX + handleSize &&
-				y >= cropY - handleSize &&
-				y <= cropY + handleSize
+				canvasX < destX ||
+				canvasX > destX + destWidth ||
+				canvasY < destY ||
+				canvasY > destY + destHeight
 			) {
+				return null;
+			}
+
+			// Convert to crop-relative coordinates (0-100)
+			const cropX = ((canvasX - destX) / destWidth) * 100;
+			const cropY = ((canvasY - destY) / destHeight) * 100;
+
+			return { x: cropX, y: cropY };
+		};
+
+		// Helper function to check if a point is in a resize handle
+		const getResizeHandle = (
+			x,
+			y,
+			crop,
+			videoElement,
+			scale = 1.0,
+			position = { x: 0, y: 0 }
+		) => {
+			const { destX, destY, destWidth, destHeight } =
+				getCropDestinationCoords(crop, videoElement, scale, position);
+			const handleSize = 6;
+
+			// Check if point is within the crop area
+			if (
+				x < destX ||
+				x > destX + destWidth ||
+				y < destY ||
+				y > destY + destHeight
+			) {
+				return null;
+			}
+
+			// Convert to crop-relative coordinates
+			const cropX = ((x - destX) / destWidth) * 100;
+			const cropY = ((y - destY) / destHeight) * 100;
+
+			// Convert handle size to crop-relative size
+			const handleSizePercent = (handleSize / destWidth) * 100;
+
+			// Check corner handles
+			if (cropX <= handleSizePercent && cropY <= handleSizePercent)
 				return "top-left";
-			}
-			if (
-				x >= cropX + cropWidth - handleSize &&
-				x <= cropX + cropWidth + handleSize &&
-				y >= cropY - handleSize &&
-				y <= cropY + handleSize
-			) {
+			if (cropX >= 100 - handleSizePercent && cropY <= handleSizePercent)
 				return "top-right";
-			}
-			if (
-				x >= cropX - handleSize &&
-				x <= cropX + handleSize &&
-				y >= cropY + cropHeight - handleSize &&
-				y <= cropY + cropHeight + handleSize
-			) {
+			if (cropX <= handleSizePercent && cropY >= 100 - handleSizePercent)
 				return "bottom-left";
-			}
 			if (
-				x >= cropX + cropWidth - handleSize &&
-				x <= cropX + cropWidth + handleSize &&
-				y >= cropY + cropHeight - handleSize &&
-				y <= cropY + cropHeight + handleSize
-			) {
+				cropX >= 100 - handleSizePercent &&
+				cropY >= 100 - handleSizePercent
+			)
 				return "bottom-right";
-			}
 
-			// Check edges
+			// Check edge handles
 			if (
-				x >= cropX - handleSize &&
-				x <= cropX + handleSize &&
-				y >= cropY &&
-				y <= cropY + cropHeight
-			) {
+				cropX <= handleSizePercent &&
+				cropY > handleSizePercent &&
+				cropY < 100 - handleSizePercent
+			)
 				return "left";
-			}
 			if (
-				x >= cropX + cropWidth - handleSize &&
-				x <= cropX + cropWidth + handleSize &&
-				y >= cropY &&
-				y <= cropY + cropHeight
-			) {
+				cropX >= 100 - handleSizePercent &&
+				cropY > handleSizePercent &&
+				cropY < 100 - handleSizePercent
+			)
 				return "right";
-			}
 			if (
-				x >= cropX &&
-				x <= cropX + cropWidth &&
-				y >= cropY - handleSize &&
-				y <= cropY + handleSize
-			) {
+				cropY <= handleSizePercent &&
+				cropX > handleSizePercent &&
+				cropX < 100 - handleSizePercent
+			)
 				return "top";
-			}
 			if (
-				x >= cropX &&
-				x <= cropX + cropWidth &&
-				y >= cropY + cropHeight - handleSize &&
-				y <= cropY + cropHeight + handleSize
-			) {
+				cropY >= 100 - handleSizePercent &&
+				cropX > handleSizePercent &&
+				cropX < 100 - handleSizePercent
+			)
 				return "bottom";
-			}
 
 			return null;
 		};
@@ -143,6 +199,55 @@ const VideoPlayer = forwardRef(
 
 		// Mouse event handlers
 		const handleCanvasMouseDown = (e) => {
+			// Handle crop tool dragging
+			if (selectedTool === "crop" && selectedClip) {
+				const coords = getCanvasCoordinates(e.clientX, e.clientY);
+				e.preventDefault();
+				e.stopPropagation();
+				setIsCropDragging(true);
+				setCropDragStart(coords);
+				setCropDragEnd(coords);
+				return;
+			}
+
+			// Handle move tool dragging
+			if (selectedTool === "move" && selectedClip) {
+				const clip = tracks
+					.flatMap((t) => t.clips)
+					.find((c) => c.id === selectedClip.clipId);
+				if (!clip) return;
+
+				const coords = getCanvasCoordinates(e.clientX, e.clientY);
+				e.preventDefault();
+				e.stopPropagation();
+				setIsMoveDragging(true);
+				setMoveDragStart(coords);
+				setMoveDragEnd(coords);
+				setOriginalPosition({
+					x: clip.position?.x || 0,
+					y: clip.position?.y || 0,
+				});
+				return;
+			}
+
+			// Handle scale tool dragging
+			if (selectedTool === "scale" && selectedClip) {
+				const clip = tracks
+					.flatMap((t) => t.clips)
+					.find((c) => c.id === selectedClip.clipId);
+				if (!clip) return;
+
+				const coords = getCanvasCoordinates(e.clientX, e.clientY);
+				e.preventDefault();
+				e.stopPropagation();
+				setIsScaleDragging(true);
+				setScaleDragStart(coords);
+				setScaleDragEnd(coords);
+				setOriginalScale(clip.scale || 1.0);
+				return;
+			}
+
+			// Handle existing crop resize/drag functionality
 			if (!isSelectedClipVisible()) return;
 
 			const clip = tracks
@@ -150,32 +255,43 @@ const VideoPlayer = forwardRef(
 				.find((c) => c.id === selectedClip.clipId);
 			if (!clip || !clip.crop) return;
 
+			const videoElement = videoElementsRef.current[clip.id];
+			if (!videoElement) return;
+
 			const coords = getCanvasCoordinates(e.clientX, e.clientY);
-			const handle = getResizeHandle(coords.x, coords.y, clip.crop);
+			const scale = clip.scale || 1.0;
+			const position = clip.position || { x: 0, y: 0 };
+			const handle = getResizeHandle(
+				coords.x,
+				coords.y,
+				clip.crop,
+				videoElement,
+				scale,
+				position
+			);
 
 			if (handle) {
 				// Start resizing
+				e.preventDefault();
+				e.stopPropagation();
 				setIsResizing(true);
 				setResizeHandle(handle);
 				setOriginalCrop({ ...clip.crop });
 				setDragStart(coords);
 			} else {
 				// Check if clicking inside the crop area for dragging
-				const canvas = canvasRef.current;
-				const canvasWidth = canvas.width;
-				const canvasHeight = canvas.height;
+				const cropCoords = canvasToCropCoords(
+					coords.x,
+					coords.y,
+					clip.crop,
+					videoElement,
+					scale,
+					position
+				);
 
-				const cropX = (clip.crop.x / 100) * canvasWidth;
-				const cropY = (clip.crop.y / 100) * canvasHeight;
-				const cropWidth = (clip.crop.width / 100) * canvasWidth;
-				const cropHeight = (clip.crop.height / 100) * canvasHeight;
-
-				if (
-					coords.x >= cropX &&
-					coords.x <= cropX + cropWidth &&
-					coords.y >= cropY &&
-					coords.y <= cropY + cropHeight
-				) {
+				if (cropCoords) {
+					e.preventDefault();
+					e.stopPropagation();
 					setIsDragging(true);
 					setDragStart(coords);
 					setOriginalCrop({ ...clip.crop });
@@ -184,6 +300,28 @@ const VideoPlayer = forwardRef(
 		};
 
 		const handleCanvasMouseMove = (e) => {
+			// Handle crop tool dragging
+			if (isCropDragging) {
+				const coords = getCanvasCoordinates(e.clientX, e.clientY);
+				setCropDragEnd(coords);
+				return;
+			}
+
+			// Handle move tool dragging
+			if (isMoveDragging && selectedClip) {
+				const coords = getCanvasCoordinates(e.clientX, e.clientY);
+				setMoveDragEnd(coords);
+				return;
+			}
+
+			// Handle scale tool dragging
+			if (isScaleDragging && selectedClip) {
+				const coords = getCanvasCoordinates(e.clientX, e.clientY);
+				setScaleDragEnd(coords);
+				return;
+			}
+
+			// Handle existing crop resize/drag functionality
 			if (!isSelectedClipVisible()) return;
 
 			const clip = tracks
@@ -191,21 +329,42 @@ const VideoPlayer = forwardRef(
 				.find((c) => c.id === selectedClip.clipId);
 			if (!clip || !clip.crop) return;
 
+			const videoElement = videoElementsRef.current[clip.id];
+			if (!videoElement) return;
+
 			const coords = getCanvasCoordinates(e.clientX, e.clientY);
-			const canvas = canvasRef.current;
-			const canvasWidth = canvas.width;
-			const canvasHeight = canvas.height;
+			const scale = clip.scale || 1.0;
+			const position = clip.position || { x: 0, y: 0 };
 
 			if (isResizing && resizeHandle && originalCrop) {
-				// Handle resizing
-				const deltaX = coords.x - dragStart.x;
-				const deltaY = coords.y - dragStart.y;
+				e.preventDefault();
+				e.stopPropagation();
+
+				// Convert current and start coordinates to crop-relative coordinates
+				const currentCropCoords = canvasToCropCoords(
+					coords.x,
+					coords.y,
+					originalCrop,
+					videoElement,
+					scale,
+					position
+				);
+				const startCropCoords = canvasToCropCoords(
+					dragStart.x,
+					dragStart.y,
+					originalCrop,
+					videoElement,
+					scale,
+					position
+				);
+
+				if (!currentCropCoords || !startCropCoords) return;
+
+				// Calculate delta in crop-relative coordinates
+				const deltaX = currentCropCoords.x - startCropCoords.x;
+				const deltaY = currentCropCoords.y - startCropCoords.y;
 
 				let newCrop = { ...originalCrop };
-
-				// Convert pixel deltas to percentage deltas
-				const deltaXPercent = (deltaX / canvasWidth) * 100;
-				const deltaYPercent = (deltaY / canvasHeight) * 100;
 
 				switch (resizeHandle) {
 					case "top-left":
@@ -213,14 +372,14 @@ const VideoPlayer = forwardRef(
 							0,
 							Math.min(
 								originalCrop.x + originalCrop.width - 10,
-								originalCrop.x + deltaXPercent
+								originalCrop.x + deltaX
 							)
 						);
 						newCrop.y = Math.max(
 							0,
 							Math.min(
 								originalCrop.y + originalCrop.height - 10,
-								originalCrop.y + deltaYPercent
+								originalCrop.y + deltaY
 							)
 						);
 						newCrop.width =
@@ -233,12 +392,12 @@ const VideoPlayer = forwardRef(
 							0,
 							Math.min(
 								originalCrop.y + originalCrop.height - 10,
-								originalCrop.y + deltaYPercent
+								originalCrop.y + deltaY
 							)
 						);
 						newCrop.width = Math.max(
 							10,
-							originalCrop.width + deltaXPercent
+							originalCrop.width + deltaX
 						);
 						newCrop.height =
 							originalCrop.height - (newCrop.y - originalCrop.y);
@@ -248,24 +407,24 @@ const VideoPlayer = forwardRef(
 							0,
 							Math.min(
 								originalCrop.x + originalCrop.width - 10,
-								originalCrop.x + deltaXPercent
+								originalCrop.x + deltaX
 							)
 						);
 						newCrop.width =
 							originalCrop.width - (newCrop.x - originalCrop.x);
 						newCrop.height = Math.max(
 							10,
-							originalCrop.height + deltaYPercent
+							originalCrop.height + deltaY
 						);
 						break;
 					case "bottom-right":
 						newCrop.width = Math.max(
 							10,
-							originalCrop.width + deltaXPercent
+							originalCrop.width + deltaX
 						);
 						newCrop.height = Math.max(
 							10,
-							originalCrop.height + deltaYPercent
+							originalCrop.height + deltaY
 						);
 						break;
 					case "left":
@@ -273,7 +432,7 @@ const VideoPlayer = forwardRef(
 							0,
 							Math.min(
 								originalCrop.x + originalCrop.width - 10,
-								originalCrop.x + deltaXPercent
+								originalCrop.x + deltaX
 							)
 						);
 						newCrop.width =
@@ -282,7 +441,7 @@ const VideoPlayer = forwardRef(
 					case "right":
 						newCrop.width = Math.max(
 							10,
-							originalCrop.width + deltaXPercent
+							originalCrop.width + deltaX
 						);
 						break;
 					case "top":
@@ -290,7 +449,7 @@ const VideoPlayer = forwardRef(
 							0,
 							Math.min(
 								originalCrop.y + originalCrop.height - 10,
-								originalCrop.y + deltaYPercent
+								originalCrop.y + deltaY
 							)
 						);
 						newCrop.height =
@@ -299,7 +458,7 @@ const VideoPlayer = forwardRef(
 					case "bottom":
 						newCrop.height = Math.max(
 							10,
-							originalCrop.height + deltaYPercent
+							originalCrop.height + deltaY
 						);
 						break;
 				}
@@ -316,26 +475,46 @@ const VideoPlayer = forwardRef(
 					);
 				}
 			} else if (isDragging && originalCrop) {
-				// Handle dragging
-				const deltaX = coords.x - dragStart.x;
-				const deltaY = coords.y - dragStart.y;
+				e.preventDefault();
+				e.stopPropagation();
 
-				const deltaXPercent = (deltaX / canvasWidth) * 100;
-				const deltaYPercent = (deltaY / canvasHeight) * 100;
+				// Convert current and start coordinates to crop-relative coordinates
+				const currentCropCoords = canvasToCropCoords(
+					coords.x,
+					coords.y,
+					originalCrop,
+					videoElement,
+					scale,
+					position
+				);
+				const startCropCoords = canvasToCropCoords(
+					dragStart.x,
+					dragStart.y,
+					originalCrop,
+					videoElement,
+					scale,
+					position
+				);
+
+				if (!currentCropCoords || !startCropCoords) return;
+
+				// Calculate delta in crop-relative coordinates
+				const deltaX = currentCropCoords.x - startCropCoords.x;
+				const deltaY = currentCropCoords.y - startCropCoords.y;
 
 				const newCrop = {
 					x: Math.max(
 						0,
 						Math.min(
 							100 - originalCrop.width,
-							originalCrop.x + deltaXPercent
+							originalCrop.x + deltaX
 						)
 					),
 					y: Math.max(
 						0,
 						Math.min(
 							100 - originalCrop.height,
-							originalCrop.y + deltaYPercent
+							originalCrop.y + deltaY
 						)
 					),
 					width: originalCrop.width,
@@ -357,6 +536,128 @@ const VideoPlayer = forwardRef(
 		};
 
 		const handleCanvasMouseUp = () => {
+			// Handle crop tool dragging completion
+			if (isCropDragging && selectedClip) {
+				const canvas = canvasRef.current;
+				if (!canvas) return;
+
+				// Calculate the crop rectangle from drag start and end points
+				const startX = Math.min(cropDragStart.x, cropDragEnd.x);
+				const startY = Math.min(cropDragStart.y, cropDragEnd.y);
+				const endX = Math.max(cropDragStart.x, cropDragEnd.x);
+				const endY = Math.max(cropDragStart.y, cropDragEnd.y);
+
+				// Convert to percentage values (0-100)
+				const cropX = (startX / canvas.width) * 100;
+				const cropY = (startY / canvas.height) * 100;
+				const cropWidth = ((endX - startX) / canvas.width) * 100;
+				const cropHeight = ((endY - startY) / canvas.height) * 100;
+
+				// Ensure minimum size and bounds
+				const finalCrop = {
+					x: Math.max(0, Math.min(100 - cropWidth, cropX)),
+					y: Math.max(0, Math.min(100 - cropHeight, cropY)),
+					width: Math.max(5, Math.min(100 - cropX, cropWidth)),
+					height: Math.max(5, Math.min(100 - cropY, cropHeight)),
+				};
+
+				// Update the clip's crop
+				if (onCropChange) {
+					onCropChange(
+						selectedClip.trackId,
+						selectedClip.clipId,
+						finalCrop
+					);
+				}
+
+				// Reset crop dragging state
+				setIsCropDragging(false);
+				setCropDragStart({ x: 0, y: 0 });
+				setCropDragEnd({ x: 0, y: 0 });
+				return;
+			}
+
+			// Handle move tool dragging completion
+			if (isMoveDragging && selectedClip) {
+				const canvas = canvasRef.current;
+				if (!canvas) return;
+
+				// Calculate the movement delta
+				const deltaX = moveDragEnd.x - moveDragStart.x;
+				const deltaY = moveDragEnd.y - moveDragStart.y;
+
+				// Convert to percentage values relative to canvas size
+				const deltaXPercent = (deltaX / canvas.width) * 100;
+				const deltaYPercent = (deltaY / canvas.height) * 100;
+
+				// Calculate new position
+				const newPosition = {
+					x: originalPosition.x + deltaXPercent,
+					y: originalPosition.y + deltaYPercent,
+				};
+
+				// Update the clip's position
+				if (onPositionChange) {
+					onPositionChange(
+						selectedClip.trackId,
+						selectedClip.clipId,
+						newPosition
+					);
+				}
+
+				// Reset move dragging state
+				setIsMoveDragging(false);
+				setMoveDragStart({ x: 0, y: 0 });
+				setMoveDragEnd({ x: 0, y: 0 });
+				setOriginalPosition({ x: 0, y: 0 });
+				return;
+			}
+
+			// Handle scale tool dragging completion
+			if (isScaleDragging && selectedClip) {
+				const canvas = canvasRef.current;
+				if (!canvas) return;
+
+				// Calculate the center of the canvas
+				const centerX = canvas.width / 2;
+				const centerY = canvas.height / 2;
+
+				// Calculate distances from center
+				const startDistanceFromCenter = Math.sqrt(
+					Math.pow(scaleDragStart.x - centerX, 2) +
+						Math.pow(scaleDragStart.y - centerY, 2)
+				);
+				const endDistanceFromCenter = Math.sqrt(
+					Math.pow(scaleDragEnd.x - centerX, 2) +
+						Math.pow(scaleDragEnd.y - centerY, 2)
+				);
+
+				// Calculate scale change based on distance change
+				const distanceChange =
+					endDistanceFromCenter - startDistanceFromCenter;
+				const scaleChange = distanceChange / 100; // Adjust sensitivity
+
+				// Calculate new scale
+				const newScale = originalScale + scaleChange;
+
+				// Update the clip's scale
+				if (onScaleChange) {
+					onScaleChange(
+						selectedClip.trackId,
+						selectedClip.clipId,
+						newScale
+					);
+				}
+
+				// Reset scale dragging state
+				setIsScaleDragging(false);
+				setScaleDragStart({ x: 0, y: 0 });
+				setScaleDragEnd({ x: 0, y: 0 });
+				setOriginalScale(newScale);
+				return;
+			}
+
+			// Handle existing crop resize/drag functionality
 			setIsDragging(false);
 			setIsResizing(false);
 			setResizeHandle(null);
@@ -366,16 +667,41 @@ const VideoPlayer = forwardRef(
 		// Add global mouse event listeners
 		useEffect(() => {
 			const handleGlobalMouseUp = () => {
-				if (isDragging || isResizing) {
+				if (
+					isDragging ||
+					isResizing ||
+					isCropDragging ||
+					isMoveDragging ||
+					isScaleDragging
+				) {
 					setIsDragging(false);
 					setIsResizing(false);
+					setIsCropDragging(false);
+					setIsMoveDragging(false);
+					setIsScaleDragging(false);
 					setResizeHandle(null);
 					setOriginalCrop(null);
+					setCropDragStart({ x: 0, y: 0 });
+					setCropDragEnd({ x: 0, y: 0 });
+					setMoveDragStart({ x: 0, y: 0 });
+					setMoveDragEnd({ x: 0, y: 0 });
+					setOriginalPosition({ x: 0, y: 0 });
+					setScaleDragStart({ x: 0, y: 0 });
+					setScaleDragEnd({ x: 0, y: 0 });
+					setOriginalScale(1.0);
 				}
 			};
 
 			const handleGlobalMouseMove = (e) => {
-				if (isDragging || isResizing) {
+				if (
+					isDragging ||
+					isResizing ||
+					isCropDragging ||
+					isMoveDragging ||
+					isScaleDragging
+				) {
+					e.preventDefault();
+					e.stopPropagation();
 					handleCanvasMouseMove(e);
 				}
 			};
@@ -393,12 +719,23 @@ const VideoPlayer = forwardRef(
 		}, [
 			isDragging,
 			isResizing,
+			isCropDragging,
+			isMoveDragging,
+			isScaleDragging,
 			selectedClip,
 			tracks,
 			currentTime,
 			originalCrop,
 			resizeHandle,
 			dragStart,
+			cropDragStart,
+			cropDragEnd,
+			moveDragStart,
+			moveDragEnd,
+			originalPosition,
+			scaleDragStart,
+			scaleDragEnd,
+			originalScale,
 		]);
 
 		useEffect(() => {
@@ -447,6 +784,11 @@ const VideoPlayer = forwardRef(
 							width: 100,
 							height: 100,
 						};
+						const scale = topVideoClip.scale || 1.0;
+						const position = topVideoClip.position || {
+							x: 0,
+							y: 0,
+						};
 						const sourceX =
 							(videoElement.videoWidth * crop.x) / 100;
 						const sourceY =
@@ -456,16 +798,25 @@ const VideoPlayer = forwardRef(
 						const sourceHeight =
 							(videoElement.videoHeight * crop.height) / 100;
 
+						// Get destination coordinates using the helper function
+						const { destX, destY, destWidth, destHeight } =
+							getCropDestinationCoords(
+								crop,
+								videoElement,
+								scale,
+								position
+							);
+
 						ctx.drawImage(
 							videoElement,
 							sourceX,
 							sourceY,
 							sourceWidth,
 							sourceHeight,
-							0,
-							0,
-							canvas.width,
-							canvas.height
+							destX,
+							destY,
+							destWidth,
+							destHeight
 						);
 
 						// Draw blue border if this clip is selected and currently playing
@@ -491,12 +842,11 @@ const VideoPlayer = forwardRef(
 								height: 100,
 							};
 
-							// Convert crop percentages to pixel coordinates
-							const cropX = (crop.x / 100) * canvas.width;
-							const cropY = (crop.y / 100) * canvas.height;
-							const cropWidth = (crop.width / 100) * canvas.width;
-							const cropHeight =
-								(crop.height / 100) * canvas.height;
+							// Use the same destination coordinates as the video rendering
+							const cropX = destX;
+							const cropY = destY;
+							const cropWidth = destWidth;
+							const cropHeight = destHeight;
 
 							// Draw crop border
 							ctx.strokeStyle = "#00ff00";
@@ -585,6 +935,172 @@ const VideoPlayer = forwardRef(
 						}
 					}
 				});
+
+				// Draw crop overlay when crop tool is active and dragging
+				if (isCropDragging && selectedTool === "crop") {
+					const canvas = canvasRef.current;
+
+					// Calculate the crop rectangle from drag start and end points
+					const startX = Math.min(cropDragStart.x, cropDragEnd.x);
+					const startY = Math.min(cropDragStart.y, cropDragEnd.y);
+					const endX = Math.max(cropDragStart.x, cropDragEnd.x);
+					const endY = Math.max(cropDragStart.y, cropDragEnd.y);
+					const cropWidth = endX - startX;
+					const cropHeight = endY - startY;
+
+					// Draw crop rectangle border
+					ctx.strokeStyle = "#00ff00";
+					ctx.lineWidth = 2;
+					ctx.setLineDash([5, 5]);
+					ctx.strokeRect(startX, startY, cropWidth, cropHeight);
+					ctx.setLineDash([]);
+
+					// Draw crop area label
+					ctx.fillStyle = "#00ff00";
+					ctx.font = "14px Arial";
+					ctx.textAlign = "center";
+					const labelX = startX + cropWidth / 2;
+					const labelY = startY - 10;
+					ctx.fillText("Crop Area", labelX, labelY);
+				}
+
+				// Draw move preview when move tool is active and dragging
+				if (isMoveDragging && selectedTool === "move" && selectedClip) {
+					const clip = tracks
+						.flatMap((t) => t.clips)
+						.find((c) => c.id === selectedClip.clipId);
+
+					if (clip) {
+						const videoElement = videoElementsRef.current[clip.id];
+						if (videoElement && videoElement.readyState >= 2) {
+							// Calculate the movement delta
+							const deltaX = moveDragEnd.x - moveDragStart.x;
+							const deltaY = moveDragEnd.y - moveDragStart.y;
+
+							// Convert to percentage values relative to canvas size
+							const canvas = canvasRef.current;
+							const deltaXPercent = (deltaX / canvas.width) * 100;
+							const deltaYPercent =
+								(deltaY / canvas.height) * 100;
+
+							// Calculate preview position
+							const previewPosition = {
+								x: originalPosition.x + deltaXPercent,
+								y: originalPosition.y + deltaYPercent,
+							};
+
+							// Get crop and scale from clip
+							const crop = clip.crop || {
+								x: 0,
+								y: 0,
+								width: 100,
+								height: 100,
+							};
+							const scale = clip.scale || 1.0;
+
+							// Get destination coordinates for preview
+							const { destX, destY, destWidth, destHeight } =
+								getCropDestinationCoords(
+									crop,
+									videoElement,
+									scale,
+									previewPosition
+								);
+
+							// Draw preview boundary
+							ctx.strokeStyle = "#ff6600";
+							ctx.lineWidth = 2;
+							ctx.setLineDash([8, 4]);
+							ctx.strokeRect(destX, destY, destWidth, destHeight);
+							ctx.setLineDash([]);
+
+							// Draw preview label
+							ctx.fillStyle = "#ff6600";
+							ctx.font = "14px Arial";
+							ctx.textAlign = "center";
+							const labelX = destX + destWidth / 2;
+							const labelY = destY - 10;
+							ctx.fillText("Move Preview", labelX, labelY);
+						}
+					}
+				}
+
+				// Draw scale preview when scale tool is active and dragging
+				if (
+					isScaleDragging &&
+					selectedTool === "scale" &&
+					selectedClip
+				) {
+					const clip = tracks
+						.flatMap((t) => t.clips)
+						.find((c) => c.id === selectedClip.clipId);
+
+					if (clip) {
+						const videoElement = videoElementsRef.current[clip.id];
+						if (videoElement && videoElement.readyState >= 2) {
+							const canvas = canvasRef.current;
+
+							// Calculate the center of the canvas
+							const centerX = canvas.width / 2;
+							const centerY = canvas.height / 2;
+
+							// Calculate distances from center
+							const startDistanceFromCenter = Math.sqrt(
+								Math.pow(scaleDragStart.x - centerX, 2) +
+									Math.pow(scaleDragStart.y - centerY, 2)
+							);
+							const endDistanceFromCenter = Math.sqrt(
+								Math.pow(scaleDragEnd.x - centerX, 2) +
+									Math.pow(scaleDragEnd.y - centerY, 2)
+							);
+
+							// Calculate scale change based on distance change
+							const distanceChange =
+								endDistanceFromCenter - startDistanceFromCenter;
+							const scaleChange = distanceChange / 100; // Adjust sensitivity
+
+							// Calculate preview scale
+							const previewScale = originalScale + scaleChange;
+
+							// Get crop and position from clip
+							const crop = clip.crop || {
+								x: 0,
+								y: 0,
+								width: 100,
+								height: 100,
+							};
+							const position = clip.position || { x: 0, y: 0 };
+
+							// Get destination coordinates for preview
+							const { destX, destY, destWidth, destHeight } =
+								getCropDestinationCoords(
+									crop,
+									videoElement,
+									previewScale,
+									position
+								);
+
+							// Draw preview boundary
+							ctx.strokeStyle = "#00ccff";
+							ctx.lineWidth = 2;
+							ctx.setLineDash([8, 4]);
+							ctx.strokeRect(destX, destY, destWidth, destHeight);
+							ctx.setLineDash([]);
+
+							// Draw preview label
+							ctx.fillStyle = "#00ccff";
+							ctx.font = "14px Arial";
+							ctx.textAlign = "center";
+							const labelX = destX + destWidth / 2;
+							const labelY = destY - 10;
+							ctx.fillText(
+								`Scale: ${previewScale.toFixed(2)}x`,
+								labelX,
+								labelY
+							);
+						}
+					}
+				}
 			};
 
 			const interval = setInterval(
@@ -592,7 +1108,22 @@ const VideoPlayer = forwardRef(
 				1000 / (24 * playbackSpeed)
 			); // Adjust FPS based on playback speed
 			return () => clearInterval(interval);
-		}, [tracks, currentTime, playbackSpeed, selectedClip]); // Added selectedClip to dependencies
+		}, [
+			tracks,
+			currentTime,
+			playbackSpeed,
+			isCropDragging,
+			isMoveDragging,
+			isScaleDragging,
+			selectedTool,
+			cropDragStart,
+			cropDragEnd,
+			moveDragStart,
+			moveDragEnd,
+			scaleDragStart,
+			scaleDragEnd,
+			originalScale,
+		]); // Added scale dragging dependencies
 
 		useEffect(() => {
 			// Create video and audio elements for each clip
@@ -787,6 +1318,10 @@ const VideoPlayer = forwardRef(
 							? "dragging"
 							: isResizing
 							? "resizing"
+							: selectedTool === "crop"
+							? "crop-tool"
+							: selectedTool === "scale"
+							? "scale-tool"
 							: isSelectedClipVisible()
 							? "interactive"
 							: ""

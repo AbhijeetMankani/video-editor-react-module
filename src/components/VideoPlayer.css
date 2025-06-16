@@ -26,6 +26,14 @@
 	cursor: crosshair;
 }
 
+.video-canvas.crop-tool {
+	cursor: crosshair;
+}
+
+.video-canvas.scale-tool {
+	cursor: crosshair;
+}
+
 .player-controls {
 	display: flex;
 	align-items: center;

@@ -121,6 +121,85 @@
 
 .editor-main {
 	display: flex;
+	flex: 1;
+	overflow: hidden;
+}
+
+.toolbar-section {
+	width: 200px;
+	background-color: #2a2a2a;
+	border-right: 1px solid #444;
+	flex-shrink: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.toolbar {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+.toolbar-header {
+	padding: 1rem;
+	border-bottom: 1px solid #444;
+	background-color: #333;
+}
+
+.toolbar-header h3 {
+	margin: 0;
+	font-size: 1.1rem;
+	color: white;
+}
+
+.toolbar-content {
+	flex: 1;
+	padding: 1rem;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.tool-button {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 1rem 0.5rem;
+	background-color: #333;
+	border: 1px solid #555;
+	border-radius: 8px;
+	color: white;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	width: 100%;
+}
+
+.tool-button:hover {
+	background-color: #444;
+	border-color: #666;
+}
+
+.tool-button.active {
+	background-color: #007acc;
+	border-color: #005a9e;
+}
+
+.tool-button.active:hover {
+	background-color: #005a9e;
+}
+
+.tool-icon {
+	font-size: 1.5rem;
+}
+
+.tool-name {
+	font-size: 0.9rem;
+	font-weight: 500;
+}
+
+.editor-content {
+	display: flex;
 	flex-direction: column;
 	flex: 1;
 	overflow: hidden;
@@ -197,7 +276,7 @@
 	overflow-y: auto;
 	overflow-x: hidden;
 	padding: 1rem;
-	max-height: calc(400px - 60px);
+	/* max-height: calc(100%); */
 }
 
 .property-group {
@@ -258,11 +337,46 @@
 
 .crop-row label {
 	min-width: 40px;
-	margin-bottom: 0;
+	font-size: 0.9rem;
+	color: #ccc;
 }
 
 .crop-row input {
-	flex: 1;
+	width: 60px;
+	padding: 0.25rem 0.5rem;
+	background-color: #333;
+	border: 1px solid #555;
+	border-radius: 4px;
+	color: white;
+	font-size: 0.9rem;
+}
+
+.position-controls {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.position-row {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.position-row label {
+	min-width: 40px;
+	font-size: 0.9rem;
+	color: #ccc;
+}
+
+.position-row input {
+	width: 60px;
+	padding: 0.25rem 0.5rem;
+	background-color: #333;
+	border: 1px solid #555;
+	border-radius: 4px;
+	color: white;
+	font-size: 0.9rem;
 }
 
 .volume-control {
@@ -276,6 +390,23 @@
 }
 
 .volume-value {
+	min-width: 30px;
+	text-align: center;
+	font-family: monospace;
+	color: #ccc;
+}
+
+.scale-control {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.scale-control input[type="range"] {
+	flex: 1;
+}
+
+.scale-value {
 	min-width: 30px;
 	text-align: center;
 	font-family: monospace;
@@ -315,9 +446,27 @@
 	font-family: monospace;
 	font-size: 1.1rem;
 	background-color: #333;
-	padding: 0.5rem 0.75rem;
+	padding: 0.5rem;
 	border-radius: 4px;
-	min-width: 100px;
+	min-width: 120px;
 	text-align: center;
-	margin-left: 1rem;
+}
+
+.tool-indicator {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	background-color: #ff6600;
+	color: white;
+	padding: 0.5rem 1rem;
+	border-radius: 4px;
+	font-size: 0.9rem;
+}
+
+.tool-indicator .tool-icon {
+	font-size: 1.1rem;
+}
+
+.tool-indicator .tool-instruction {
+	font-weight: 500;
 }
