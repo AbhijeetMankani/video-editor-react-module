@@ -64,12 +64,6 @@ const VideoEditor = () => {
 			icon: "🔪",
 			description: "Cut clips at timeline position",
 		},
-		{
-			id: "volume",
-			name: "Volume",
-			icon: "🔊",
-			description: "Adjust audio volume",
-		},
 	];
 
 	const handleTimeUpdate = (time) => {
@@ -187,6 +181,7 @@ const VideoEditor = () => {
 			...clip,
 			id: `clip-${Date.now()}-1`,
 			duration: cutPoint,
+			originalDuration: clip.originalDuration || clip.duration,
 			trimEnd: clip.trimStart + cutPoint,
 		};
 
@@ -196,6 +191,7 @@ const VideoEditor = () => {
 			id: `clip-${Date.now()}-2`,
 			startTime: clip.startTime + cutPoint,
 			duration: clip.duration - cutPoint,
+			originalDuration: clip.originalDuration || clip.duration,
 			trimStart: clip.trimStart + cutPoint,
 		};
 
@@ -230,6 +226,7 @@ const VideoEditor = () => {
 								id: `clip-${Date.now()}`,
 								startTime: lastEnd,
 								duration,
+								originalDuration: duration,
 								source: clipData.source,
 								trimStart: 0,
 								trimEnd: duration,
@@ -275,6 +272,7 @@ const VideoEditor = () => {
 									id: `clip-${Date.now()}`,
 									startTime: lastEnd,
 									duration: processedFile.duration,
+									originalDuration: processedFile.duration,
 									source: processedFile.url,
 									trimStart: 0,
 									trimEnd: processedFile.duration,
@@ -439,6 +437,11 @@ const VideoEditor = () => {
 		};
 	}, [selectedTool, selectedClip, currentTime, tracks]);
 
+	const handleExport = () => {
+		// Implementation of handleExport function
+		console.log("Export functionality not implemented yet");
+	};
+
 	return (
 		<div className="video-editor">
 			<div className="editor-header">
@@ -458,6 +461,12 @@ const VideoEditor = () => {
 							</span>
 						</div>
 					)}
+					<button
+						className="export-button"
+						onClick={() => handleExport()}
+					>
+						📤 Export
+					</button>
 				</div>
 			</div>
 

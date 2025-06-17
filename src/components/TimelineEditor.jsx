@@ -171,18 +171,36 @@ const TimelineEditor = ({
 			const track = tracks.find((t) => t.id === resizing.trackId);
 			if (!track) return;
 
+			// Use the clip's original duration property
+			const clipOriginalDuration =
+				resizing.clip.originalDuration || resizing.clip.duration;
+
 			if (resizing.side === "start") {
+				// Resizing from left side - update trim start and move start time
+				let newTrimStart = (resizing.clip.trimStart || 0) + deltaTime;
 				let newStartTime = originalStartTime + deltaTime;
 				let newDuration = originalDuration - deltaTime;
+
+				// Ensure trim start doesn't go negative
+				if (newTrimStart < 0) {
+					newTrimStart = 0;
+					newStartTime =
+						originalStartTime + (resizing.clip.trimStart || 0);
+					newDuration =
+						originalDuration + (resizing.clip.trimStart || 0);
+				}
+
+				// Ensure minimum duration
 				if (newDuration < MIN_DURATION) {
+					newTrimStart =
+						(resizing.clip.trimStart || 0) +
+						(originalDuration - MIN_DURATION);
 					newStartTime =
 						originalStartTime + (originalDuration - MIN_DURATION);
 					newDuration = MIN_DURATION;
 				}
-				if (newStartTime < 0) {
-					newStartTime = 0;
-					newDuration = originalStartTime + originalDuration;
-				}
+
+				// Check for overlaps
 				if (
 					!checkForOverlaps(
 						track,
@@ -192,13 +210,40 @@ const TimelineEditor = ({
 					)
 				) {
 					onClipUpdate(resizing.trackId, resizing.clip.id, {
+						trimStart: newTrimStart,
 						startTime: newStartTime,
 						duration: newDuration,
 					});
 				}
 			} else if (resizing.side === "end") {
+				// Resizing from right side - update trim end
+				let newTrimEnd =
+					(resizing.clip.trimEnd || clipOriginalDuration) + deltaTime;
 				let newDuration = originalDuration + deltaTime;
-				if (newDuration < MIN_DURATION) newDuration = MIN_DURATION;
+
+				// Ensure trim end doesn't go beyond the original clip length
+				if (newTrimEnd > clipOriginalDuration) {
+					newTrimEnd = clipOriginalDuration;
+					newDuration =
+						clipOriginalDuration - (resizing.clip.trimStart || 0);
+				}
+
+				// Ensure trim end doesn't go below trim start
+				const currentTrimStart = resizing.clip.trimStart || 0;
+				if (newTrimEnd <= currentTrimStart) {
+					newTrimEnd = currentTrimStart + MIN_DURATION;
+					newDuration = MIN_DURATION;
+				}
+
+				// Ensure minimum duration
+				if (newDuration < MIN_DURATION) {
+					newTrimEnd =
+						(resizing.clip.trimEnd || clipOriginalDuration) -
+						(originalDuration - MIN_DURATION);
+					newDuration = MIN_DURATION;
+				}
+
+				// Check for overlaps
 				if (
 					!checkForOverlaps(
 						track,
@@ -208,6 +253,7 @@ const TimelineEditor = ({
 					)
 				) {
 					onClipUpdate(resizing.trackId, resizing.clip.id, {
+						trimEnd: newTrimEnd,
 						duration: newDuration,
 					});
 				}
