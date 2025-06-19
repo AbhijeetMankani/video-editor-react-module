@@ -6,6 +6,13 @@ import { getTimelineDuration } from "../utils/getTimelineDuration";
 import { getTrackLastEnd } from "../utils/getTrackLastEnd";
 import { checkForOverlaps } from "../utils/checkForOverlaps";
 import { processVideoFile, processAudioFile } from "../utils/fileUploadUtils";
+import {
+	exportVideo,
+	downloadVideo,
+	simpleExportVideo,
+	exportAllIntermediateFiles,
+	logVisibleClipSections,
+} from "../utils/ffmpegUtils";
 
 const VideoEditor = () => {
 	const [tracks, setTracks] = useState([
@@ -29,6 +36,11 @@ const VideoEditor = () => {
 	const [zoom, setZoom] = useState(1);
 	const [selectedClip, setSelectedClip] = useState(null);
 	const [selectedTool, setSelectedTool] = useState("select");
+	const [exportProgress, setExportProgress] = useState({
+		isVisible: false,
+		progress: 0,
+		message: "",
+	});
 
 	const videoRef = useRef(null);
 
@@ -437,9 +449,84 @@ const VideoEditor = () => {
 		};
 	}, [selectedTool, selectedClip, currentTime, tracks]);
 
-	const handleExport = () => {
-		// Implementation of handleExport function
-		console.log("Export functionality not implemented yet");
+	const handleExport = async () => {
+		try {
+			// Check if there are any clips to export
+			const hasClips = tracks.some((track) => track.clips.length > 0);
+			if (!hasClips) {
+				alert(
+					"No clips to export. Please add some video or audio clips first."
+				);
+				return;
+			}
+
+			// Show progress modal
+			setExportProgress({
+				isVisible: true,
+				progress: 0,
+				message: "Starting export...",
+			});
+
+			let result;
+
+			try {
+				// Try the main export function first
+				result = await exportVideo(
+					tracks,
+					timelineDuration,
+					(progress, message) => {
+						setExportProgress({
+							isVisible: true,
+							progress,
+							message,
+						});
+					}
+				);
+			} catch (error) {
+				console.error("Main export failed, trying fallback:", error);
+
+				// If main export fails, try the simple fallback
+				setExportProgress({
+					isVisible: true,
+					progress: 0,
+					message: "Trying simplified export...",
+				});
+
+				result = await simpleExportVideo(
+					tracks,
+					timelineDuration,
+					(progress, message) => {
+						setExportProgress({
+							isVisible: true,
+							progress,
+							message,
+						});
+					}
+				);
+			}
+
+			// Download the exported video
+			downloadVideo(result.blob, "exported-video.mp4");
+
+			// Hide progress modal
+			setExportProgress({ isVisible: false, progress: 0, message: "" });
+		} catch (error) {
+			console.error("Export failed:", error);
+			alert(
+				`Export failed: ${error.message}\n\nPlease try with a smaller video file or fewer clips.`
+			);
+			setExportProgress({ isVisible: false, progress: 0, message: "" });
+		}
+	};
+
+	const handleDebugExport = async () => {
+		try {
+			logVisibleClipSections(tracks);
+			alert("Visible clip sections have been logged to the console.");
+		} catch (error) {
+			console.error("Debug export failed:", error);
+			alert(`Debug export failed: ${error.message}`);
+		}
 	};
 
 	return (
@@ -466,6 +553,13 @@ const VideoEditor = () => {
 						onClick={() => handleExport()}
 					>
 						📤 Export
+					</button>
+					<button
+						className="debug-export-button"
+						onClick={() => handleDebugExport()}
+						title="Export all intermediate files for debugging"
+					>
+						🐛 Debug Export
 					</button>
 				</div>
 			</div>
@@ -894,6 +988,29 @@ const VideoEditor = () => {
 					</div>
 				</div>
 			</div>
+
+			{/* Export Progress Modal */}
+			{exportProgress.isVisible && (
+				<div className="export-progress-modal">
+					<div className="export-progress-content">
+						<h3>Exporting Video...</h3>
+						<div className="progress-bar">
+							<div
+								className="progress-fill"
+								style={{
+									width: `${exportProgress.progress * 100}%`,
+								}}
+							></div>
+						</div>
+						<p className="progress-message">
+							{exportProgress.message}
+						</p>
+						<p className="progress-percentage">
+							{Math.round(exportProgress.progress * 100)}%
+						</p>
+					</div>
+				</div>
+			)}
 		</div>
 	);
 };
