@@ -23,7 +23,7 @@ A React-based video editor with timeline editing, drag-and-drop functionality, a
 1. Clone the repository:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/AbhijeetMankani/video-editor-react
 cd video-editor-ai
 ```
 
@@ -36,7 +36,7 @@ npm install
 3. Start the development server:
 
 ```bash
-npm start
+npm run dev
 ```
 
 4. Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
