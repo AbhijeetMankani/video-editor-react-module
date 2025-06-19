@@ -188,6 +188,7 @@ export const exportVideo = async (tracks, duration, onProgress) => {
 				segDuration.toString(),
 				"-c:v",
 				"libx264",
+				"-an",
 				"-preset",
 				"ultrafast",
 				"-pix_fmt",
@@ -212,26 +213,128 @@ export const exportVideo = async (tracks, duration, onProgress) => {
 			segments.push({ type: "black", filename: blackName });
 		}
 
-		// Create concat list file
+		// Create concat list file for video
 		const concatList = segments
 			.map((s) => `file '${s.filename}'`)
 			.join("\n");
 		await ffmpegInstance.writeFile("concat_list.txt", concatList);
 
+		if (onProgress) onProgress(0.7, "Processing audio tracks...");
+
+		// --- AUDIO MIXING ---
+		const audioTracks = tracks.filter((t) => t.type === "audio");
+		let audioInputs = [];
+		let audioFilters = [];
+		let amixInputs = [];
+		let audioIndex = 0;
+		for (const track of audioTracks) {
+			for (const clip of track.clips) {
+				if (!clip.source || clip.muted) continue;
+				const inputName = `audio_${clip.id}.mp3`;
+				// Write file if not already written
+				if (
+					!(await ffmpegInstance.listDir("/")).some(
+						(f) => f.name === inputName
+					)
+				) {
+					const fileData = await fetchFile(clip.originalFile);
+					await ffmpegInstance.writeFile(inputName, fileData);
+					console.log(
+						`[Audio Export] Wrote audio file: ${inputName}`
+					);
+				}
+				// Trim and position audio
+				const trimmedName = `audio_trimmed_${clip.id}.mp3`;
+				console.log(
+					`[Audio Export] Trimming and delaying audio: ${inputName} -> ${trimmedName} (startTime: ${clip.startTime}, duration: ${clip.duration}, volume: ${clip.volume})`
+				);
+				await ffmpegInstance.exec([
+					"-ss",
+					(clip.trimStart || 0).toString(),
+					"-i",
+					inputName,
+					"-t",
+					(clip.duration || 1).toString(),
+					"-af",
+					`adelay=${(clip.startTime * 1000) | 0}|${
+						(clip.startTime * 1000) | 0
+					}${
+						clip.volume !== undefined
+							? `,volume=${clip.volume}`
+							: ""
+					}`,
+					trimmedName,
+				]);
+				console.log(`[Audio Export] Finished trimming: ${trimmedName}`);
+				audioInputs.push(trimmedName);
+				amixInputs.push(`[${audioIndex}:a]`);
+				audioIndex++;
+			}
+		}
+
+		let finalAudioName = null;
+		if (audioInputs.length > 0) {
+			// Build ffmpeg command to mix all audio
+			const mixOutput = "mixed_audio.mp3";
+			console.log(
+				`[Audio Export] Mixing ${audioInputs.length} audio tracks into ${mixOutput}`
+			);
+			await ffmpegInstance.exec([
+				...audioInputs.flatMap((name) => ["-i", name]),
+				"-filter_complex",
+				`${amixInputs.join("")}amix=inputs=${
+					audioInputs.length
+				}:duration=longest:dropout_transition=0[aout]` +
+					(amixInputs.length > 0 ? ";[aout]volume=1[aout2]" : ""),
+				"-map",
+				"0:v?",
+				"-map",
+				"[aout2]",
+				"-y",
+				mixOutput,
+			]);
+			console.log(
+				`[Audio Export] Finished mixing audio. Output: ${mixOutput}`
+			);
+			finalAudioName = mixOutput;
+			console.log(
+				`[Audio Export] Final audio file for muxing: ${finalAudioName}`
+			);
+		}
+
 		if (onProgress) onProgress(0.8, "Concatenating segments...");
 
 		const outputName = "output.mp4";
-		await ffmpegInstance.exec([
-			"-f",
-			"concat",
-			"-safe",
-			"0",
-			"-i",
-			"concat_list.txt",
-			"-c",
-			"copy",
-			outputName,
-		]);
+		// Combine video and audio
+		if (finalAudioName) {
+			await ffmpegInstance.exec([
+				"-f",
+				"concat",
+				"-safe",
+				"0",
+				"-i",
+				"concat_list.txt",
+				"-i",
+				finalAudioName,
+				"-c:v",
+				"copy",
+				"-c:a",
+				"aac",
+				outputName,
+			]);
+		} else {
+			await ffmpegInstance.exec([
+				"-f",
+				"concat",
+				"-safe",
+				"0",
+				"-i",
+				"concat_list.txt",
+				"-c",
+				"copy",
+				outputName,
+			]);
+		}
 
 		if (onProgress) onProgress(0.95, "Finalizing...");
 
@@ -444,3 +547,23 @@ export async function createBlackVideoSegment(
 		outputName,
 	]);
 }
+
+// Extract audio from a video file using ffmpeg
+export const extractAudioFromVideo = async (file, outputExt = "mp3") => {
+	const ffmpegInstance = await initFFmpeg();
+	const inputName = "input_extract_audio.mp4";
+	const outputName = `output_audio.${outputExt}`;
+	await ffmpegInstance.writeFile(inputName, await fetchFile(file));
+	await ffmpegInstance.exec([
+		"-i",
+		inputName,
+		"-vn", // no video
+		"-acodec",
+		"libmp3lame",
+		outputName,
+	]);
+	const data = await ffmpegInstance.readFile(outputName);
+	const blob = new Blob([data], { type: "audio/mpeg" });
+	const url = URL.createObjectURL(blob);
+	return { blob, url, name: file.name.replace(/\.[^/.]+$/, "") + ".mp3" };
+};

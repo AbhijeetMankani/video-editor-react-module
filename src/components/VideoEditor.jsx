@@ -12,6 +12,7 @@ import {
 	simpleExportVideo,
 	exportAllIntermediateFiles,
 	logVisibleClipSections,
+	extractAudioFromVideo,
 } from "../utils/ffmpegUtils";
 
 const VideoEditor = () => {
@@ -79,7 +80,7 @@ const VideoEditor = () => {
 	];
 
 	const handleTimeUpdate = (time) => {
-		console.log("VideoEditor handleTimeUpdate called with time:", time);
+		// console.log("VideoEditor handleTimeUpdate called with time:", time);
 		setCurrentTime(time);
 	};
 
@@ -306,6 +307,41 @@ const VideoEditor = () => {
 					return track;
 				})
 			);
+
+			// If video, ask to extract audio
+			if (track.type === "video") {
+				if (
+					window.confirm(
+						"Extract audio from this video and insert as an audio clip?"
+					)
+				) {
+					const audioResult = await extractAudioFromVideo(file);
+					const newAudioTrackId = `audio-${Date.now()}`;
+					const newAudioTrack = {
+						id: newAudioTrackId,
+						type: "audio",
+						name: `Audio Track ${
+							tracks.filter((t) => t.type === "audio").length + 1
+						}`,
+						clips: [
+							{
+								id: `clip-${Date.now()}-audio`,
+								startTime: 0,
+								duration: processedFile.duration, // Use video duration for sync
+								originalDuration: processedFile.duration,
+								source: audioResult.url,
+								trimStart: 0,
+								trimEnd: processedFile.duration,
+								type: "audio",
+								name: audioResult.name,
+								originalFile: audioResult.blob,
+								volume: 1,
+							},
+						],
+					};
+					setTracks((prevTracks) => [...prevTracks, newAudioTrack]);
+				}
+			}
 		} catch (error) {
 			console.error("Error adding clip from file:", error);
 			alert("Error uploading file. Please try again.");
