@@ -15,6 +15,11 @@ import {
 	extractAudioFromVideo,
 } from "../utils/ffmpegUtils";
 
+import { FFmpeg } from "@ffmpeg/ffmpeg";
+import { fetchFile } from "@ffmpeg/util";
+
+const ffmpeg = new FFmpeg({ log: true });
+
 const VideoEditor = () => {
 	const [tracks, setTracks] = useState([
 		{
@@ -42,6 +47,12 @@ const VideoEditor = () => {
 		progress: 0,
 		message: "",
 	});
+	const [isRecording, setIsRecording] = useState(false);
+	const [recordingStartTime, setRecordingStartTime] = useState(null);
+
+	const mediaRecorderRef = useRef(null);
+	const audioChunksRef = useRef([]);
+	const [recording, setRecording] = useState(false);
 
 	const videoRef = useRef(null);
 
@@ -76,6 +87,12 @@ const VideoEditor = () => {
 			name: "Cut",
 			icon: "🔪",
 			description: "Cut clips at timeline position",
+		},
+		{
+			id: "record",
+			name: "Record",
+			icon: "🎤",
+			description: "Record audio",
 		},
 	];
 
@@ -565,6 +582,143 @@ const VideoEditor = () => {
 		}
 	};
 
+	// Placeholder for record handler
+	const startRecording = async () => {
+		try {
+			const stream = await navigator.mediaDevices.getUserMedia({
+				audio: true,
+			});
+
+			audioChunksRef.current = []; // Clear previous chunks
+			setRecordingStartTime(currentTime); // Store the current cursor position
+
+			const mediaRecorder = new MediaRecorder(stream);
+			mediaRecorderRef.current = mediaRecorder;
+
+			mediaRecorder.ondataavailable = (event) => {
+				if (event.data.size > 0) {
+					audioChunksRef.current.push(event.data);
+				}
+			};
+
+			// Start preview playback
+			setIsPlaying(true);
+
+			// Request data every 1 second
+			mediaRecorder.start(1000);
+			setRecording(true);
+		} catch (error) {
+			console.error("Error starting recording:", error);
+		}
+	};
+
+	const handleStop = async () => {
+		return new Promise((resolve) => {
+			mediaRecorderRef.current.onstop = async () => {
+				try {
+					const blob = new Blob(audioChunksRef.current, {
+						type: "audio/webm",
+					});
+
+					if (!blob || blob.size === 0) {
+						console.error("Empty audio blob, nothing to convert.");
+						return;
+					}
+
+					if (!ffmpeg.loaded) await ffmpeg.load();
+
+					await ffmpeg.writeFile("in.webm", await fetchFile(blob));
+					console.log("MEMFS after write:", ffmpeg.listDir("/"));
+
+					await ffmpeg.exec([
+						"-i",
+						"in.webm",
+						"-vn",
+						"-acodec",
+						"libmp3lame",
+						"-q:a",
+						"2",
+						"out.mp3",
+					]);
+					console.log("MEMFS after exec:", ffmpeg.listDir("/"));
+
+					const data = await ffmpeg.readFile("out.mp3");
+					const audioBlob = new Blob([data.buffer], {
+						type: "audio/mp3",
+					});
+					const url = URL.createObjectURL(audioBlob);
+
+					// Get audio duration using Web Audio API
+					const audioDuration = await new Promise(
+						(resolveDuration) => {
+							const audioContext = new (window.AudioContext ||
+								window.webkitAudioContext)();
+							const reader = new FileReader();
+							reader.onload = async (e) => {
+								const audioBuffer =
+									await audioContext.decodeAudioData(
+										e.target.result
+									);
+								resolveDuration(audioBuffer.duration);
+							};
+							reader.readAsArrayBuffer(audioBlob);
+						}
+					);
+
+					console.log("Recorded audio duration:", audioDuration);
+
+					// Create a new audio track
+					const newTrackId = `audio-${Date.now()}`;
+					const newTrack = {
+						id: newTrackId,
+						type: "audio",
+						name: `Audio Track ${
+							tracks.filter((t) => t.type === "audio").length + 1
+						}`,
+						clips: [],
+					};
+
+					// Add the new track
+					setTracks((prevTracks) => [...prevTracks, newTrack]);
+
+					// Add the recorded clip to the new track using the stored start time
+					const clipData = {
+						id: `clip-${Date.now()}`,
+						startTime: recordingStartTime, // Use the stored start time instead of current time
+						duration: audioDuration,
+						originalDuration: audioDuration,
+						source: url,
+						trimStart: 0,
+						trimEnd: audioDuration,
+						type: "audio",
+						name: "Recorded Audio",
+						originalFile: audioBlob,
+						volume: 1,
+					};
+
+					// Add the clip to the new track
+					handleClipUpdate(newTrackId, clipData.id, clipData);
+
+					// Reset the recording start time
+					setRecordingStartTime(null);
+
+					resolve();
+				} catch (error) {
+					console.error("Error processing audio:", error);
+					resolve();
+				}
+			};
+			mediaRecorderRef.current?.stop();
+		});
+	};
+
+	const stopRecording = async () => {
+		// Stop preview playback
+		setIsPlaying(false);
+		await handleStop();
+		setRecording(false);
+	};
+
 	return (
 		<div className="video-editor">
 			<div className="editor-header">
@@ -607,23 +761,64 @@ const VideoEditor = () => {
 							<h3>Tools</h3>
 						</div>
 						<div className="toolbar-content">
-							{tools.map((tool) => (
-								<button
-									key={tool.id}
-									className={`tool-button ${
-										selectedTool === tool.id ? "active" : ""
-									}`}
-									onClick={() => setSelectedTool(tool.id)}
-									title={tool.description}
-								>
-									<span className="tool-icon">
-										{tool.icon}
-									</span>
-									<span className="tool-name">
-										{tool.name}
-									</span>
-								</button>
-							))}
+							{tools.map((tool) => {
+								if (tool.id === "record") {
+									return (
+										<button
+											key={tool.id}
+											className={`tool-button ${
+												selectedTool === tool.id
+													? "active"
+													: ""
+											}`}
+											onClick={() => {
+												if (
+													selectedTool === "record" &&
+													recording
+												) {
+													setSelectedTool("select");
+													stopRecording();
+												} else {
+													setSelectedTool(tool.id);
+													startRecording();
+												}
+											}}
+										>
+											<span className="tool-icon">
+												{recording &&
+												selectedTool === "record"
+													? "⏹️"
+													: tool.icon}
+											</span>
+											<span className="tool-name">
+												{recording &&
+												selectedTool === "record"
+													? "Stop"
+													: tool.name}
+											</span>
+										</button>
+									);
+								}
+								return (
+									<button
+										key={tool.id}
+										className={`tool-button ${
+											selectedTool === tool.id
+												? "active"
+												: ""
+										}`}
+										onClick={() => setSelectedTool(tool.id)}
+										title={tool.description}
+									>
+										<span className="tool-icon">
+											{tool.icon}
+										</span>
+										<span className="tool-name">
+											{tool.name}
+										</span>
+									</button>
+								);
+							})}
 						</div>
 					</div>
 				</div>
